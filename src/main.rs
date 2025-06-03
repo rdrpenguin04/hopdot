@@ -356,7 +356,7 @@ pub fn ready_for_scatter(
     if *state == GameOperation::Animating {
         timer.tick(time.delta());
 
-        timer.just_finished()
+        timer.just_finished() || state.is_changed()
     } else {
         timer.reset();
 
