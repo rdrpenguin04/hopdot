@@ -1,4 +1,5 @@
 pub mod ai;
+pub mod anim;
 
 use std::{
     ops::{Index, IndexMut},
@@ -11,15 +12,21 @@ use bevy::{
         experimental::taa::{TemporalAntiAliasPlugin, TemporalAntiAliasing},
     },
     pbr::ShadowFilteringMethod,
+    platform::collections::HashSet,
     prelude::*,
 };
 use bevy_prng::WyRand;
 use bevy_rand::plugin::EntropyPlugin;
 
+use crate::anim::{Bouncing, SmoothingSettings, TargetTransform};
+
 #[derive(Resource, Reflect)]
 pub struct GameAssets {
     dot_mesh: Handle<Mesh>,
     tile_mesh: Handle<Mesh>,
+    table_scene: Handle<Scene>,
+    bold_font: Handle<Font>,
+    mono_font: Handle<Font>,
     dot_color: Handle<StandardMaterial>,
 }
 
@@ -28,11 +35,21 @@ impl FromWorld for GameAssets {
         let mut meshes = world.resource_mut::<Assets<_>>();
         let dot_mesh = meshes.add(Sphere::new(0.1));
         let tile_mesh = meshes.add(Cuboid::new(0.95, 0.1, 0.95));
+
+        let asset_server = world.resource::<AssetServer>();
+        let table_scene =
+            asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/table.glb"));
+        let bold_font = asset_server.load("fonts/FiraSans-Bold.ttf");
+        let mono_font = asset_server.load("fonts/FiraMono-Medium.ttf");
+
         let mut materials = world.resource_mut::<Assets<_>>();
         let dot_color = materials.add(Color::srgb(1.0, 1.0, 1.0));
         Self {
             dot_mesh,
             tile_mesh,
+            table_scene,
+            bold_font,
+            mono_font,
             dot_color,
         }
     }
@@ -59,18 +76,9 @@ pub struct DotCellMeta {
 #[relationship(relationship_target = DotCell)]
 pub struct Dot(Entity);
 
-#[derive(Component, Deref, DerefMut, Reflect)]
-pub struct TargetTransform(pub Transform);
-
-#[derive(Component, Reflect)]
-pub struct SmoothingSettings {
-    translation_decay_rate: f32,
-    rotation_decay_rate: f32,
-    scale_decay_rate: f32,
-}
-
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect, States)]
 pub enum MainState {
+    MainMenu,
     #[default]
     Game,
 }
@@ -82,6 +90,12 @@ pub enum GameOperation {
     Animating,
     Human,
     Bot,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect, SubStates)]
+#[source(GameOperation = GameOperation::Animating)]
+pub struct EndGame {
+    game_ended: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect, SubStates)]
@@ -105,6 +119,12 @@ pub struct CellGrid {
     grid: Vec<Entity>, // would be technically more efficient to use Box<[Entity]>, but oh well
     width: usize,
 }
+
+#[derive(Component)]
+pub struct Orbiter;
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect)]
+pub struct NeedsNewBoard(bool);
 
 impl CellGrid {
     pub fn new(width: usize, height: usize) -> Self {
@@ -161,8 +181,8 @@ fn main() {
     app.add_plugins(DefaultPlugins)
         .add_plugins(TemporalAntiAliasPlugin)
         .add_plugins(MeshPickingPlugin)
-        .add_plugins(EntropyPlugin::<WyRand>::default());
-    // .add_plugins(RngPlugin);
+        .add_plugins(EntropyPlugin::<WyRand>::default())
+        .add_plugins(anim::plugin);
 
     #[cfg(debug_assertions)]
     {
@@ -197,28 +217,37 @@ fn main() {
                 //     color: Color::srgb(0.0, 0.0, 1.0),
                 //     name: "Player 2".into(),
                 // },
+                // PlayerConfigEntry::Bot {
+                //     color: Color::srgb(0.0, 1.0, 0.0),
+                //     level: 0,
+                // },
+                // PlayerConfigEntry::Bot {
+                //     color: Color::srgb(1.0, 0.0, 0.0),
+                //     level: 1,
+                // },
                 PlayerConfigEntry::Bot {
                     color: Color::srgb(0.0, 0.0, 1.0),
-                    level: 0,
+                    level: 2,
                 },
             ],
-            grid_size: (6, 6),
+            grid_size: (4, 4),
         })
         .add_systems(Startup, setup_scene)
+        .add_systems(OnEnter(EndGame { game_ended: true }), game_ended)
+        .add_systems(OnEnter(MainState::Game), fly_in_game)
         .add_systems(
             Update,
-            (
-                arrange_dots,
-                animate_cell_colors,
-                smooth_transform,
-                run_bouncing,
+            ((
                 ai::tick_ai,
                 scatter_tick.run_if(ready_for_scatter),
-            ),
+                orbit.run_if(in_state(EndGame { game_ended: true })),
+            )
+                .run_if(in_state(MainState::Game)),),
         )
         .init_state::<MainState>()
-        .init_state::<GameOperation>()
-        .init_state::<CurrentTurn>()
+        .add_sub_state::<GameOperation>()
+        .add_sub_state::<CurrentTurn>()
+        .add_sub_state::<EndGame>()
         .register_type::<GameAssets>()
         .register_type::<CellColor>()
         .register_type::<CurrentTurn>()
@@ -232,7 +261,9 @@ fn main() {
         .run();
 }
 
-const GRAY: Color = Color::Srgba(bevy::color::palettes::tailwind::GRAY_400);
+pub const GRAY: Color = Color::Srgba(bevy::color::palettes::tailwind::GRAY_400);
+
+fn fly_in_game() {}
 
 fn spawn_dot(x: f32, z: f32, game_assets: &GameAssets) -> impl Bundle {
     (
@@ -260,7 +291,7 @@ fn spawn_cell(
     commands
         .spawn((
             Mesh3d(game_assets.tile_mesh.clone_weak()),
-            MeshMaterial3d(materials.add(Color::from(GRAY))),
+            MeshMaterial3d(materials.add(GRAY)),
             Transform::from_xyz(x, -0.15, z),
             TargetTransform(Transform::from_xyz(x, -0.15, z)),
             SmoothingSettings {
@@ -270,7 +301,7 @@ fn spawn_cell(
             },
             Pickable::default(),
             related!(DotCell[
-                spawn_dot(x, z, &game_assets),
+                spawn_dot(x, z, game_assets),
             ]),
             DotCellMeta { capacity },
         ))
@@ -291,10 +322,13 @@ fn spawn_cell(
                   mut commands: Commands,
                   mut colors: Query<&mut CellColor>,
                   game_assets: Res<GameAssets>,
-                  state: Res<State<GameOperation>>,
-                  mut next_state: ResMut<NextState<GameOperation>>,
-                  current_turn: Res<State<CurrentTurn>>| {
-                if *state == GameOperation::Human {
+                  state: Option<Res<State<GameOperation>>>,
+                  next_state: Option<ResMut<NextState<GameOperation>>>,
+                  current_turn: Option<Res<State<CurrentTurn>>>| {
+                if let (Some(state), Some(mut next_state), Some(current_turn)) =
+                    (state, next_state, current_turn)
+                    && *state == GameOperation::Human
+                {
                     let mut color = colors.get_mut(trigger.target).unwrap();
                     if color.player == 0 || color.player == current_turn.0 {
                         color.player = current_turn.0;
@@ -322,7 +356,7 @@ fn setup_scene(
     for y in 0..height {
         for x in 0..width {
             let x_border = x == 0 || x == grid.width() - 1;
-            let y_border = y == 0 || y == grid.width() - 1;
+            let y_border = y == 0 || y == grid.height() - 1;
             let capacity = if x_border && y_border {
                 2
             } else if x_border || y_border {
@@ -342,6 +376,11 @@ fn setup_scene(
     }
 
     commands.spawn((
+        SceneRoot(game_assets.table_scene.clone_weak()),
+        Transform::from_xyz(0.0, -0.3, 0.0),
+    ));
+
+    commands.spawn((
         PointLight {
             color: Color::WHITE,
             shadows_enabled: true,
@@ -352,125 +391,77 @@ fn setup_scene(
     ));
 
     commands.spawn((
-        Camera3d::default(),
-        Camera {
-            hdr: true,
+        PointLight {
+            color: Color::WHITE,
+            shadows_enabled: true,
+            soft_shadows_enabled: true,
             ..default()
         },
-        Transform::from_xyz(0.0, max_dim as f32 * 2.0, -(max_dim as f32))
-            .looking_at(Vec3::ZERO, Vec3::Y),
-        Msaa::Off,
-        TemporalAntiAliasing::default(),
-        ShadowFilteringMethod::Temporal,
-        TargetTransform(
-            Transform::from_xyz(0.0, max_dim as f32 * 2.0, -(max_dim as f32))
-                .looking_at(Vec3::ZERO, Vec3::Y),
-        ),
-        SmoothingSettings {
-            translation_decay_rate: 2.0,
-            rotation_decay_rate: 1.8,
-            scale_decay_rate: 1.5,
-        },
-        Bloom::NATURAL,
+        Transform::from_xyz(0.0, -4.0, 0.0),
     ));
-}
 
-fn smooth_transform(
-    mut transforms: Query<(&TargetTransform, &SmoothingSettings, &mut Transform)>,
-    time: Res<Time>,
-) {
-    for (target, settings, mut transform) in &mut transforms {
-        transform.translation.smooth_nudge(
-            &target.translation,
-            settings.translation_decay_rate,
-            time.delta_secs(),
-        );
-        transform.rotation.smooth_nudge(
-            &target.rotation,
-            settings.rotation_decay_rate,
-            time.delta_secs(),
-        );
-        transform
-            .scale
-            .smooth_nudge(&target.scale, settings.scale_decay_rate, time.delta_secs());
-    }
-}
-
-fn arrange_dots(
-    cells: Query<(&DotCell, &Transform)>,
-    mut dots: Query<&mut TargetTransform, With<Dot>>,
-) {
-    for (cell, transform) in &cells {
-        let (cell_x, cell_z) = (transform.translation.x, transform.translation.z);
-        let arrangement: &[(f32, f32)] = match cell.dots.len() {
-            0 => continue, // Something has gone dreadfully wrong. Or we're early. Fail with grace.
-            1 => &[(0.0, 0.0)],
-            2 => &[(-0.25, 0.25), (0.25, -0.25)],
-            3 => &[(-0.25, 0.25), (0.25, -0.25), (0.0, 0.0)],
-            4 => &[(-0.25, 0.25), (0.25, -0.25), (-0.25, -0.25), (0.25, 0.25)],
-            5 => &[
-                (-0.25, 0.25),
-                (0.25, -0.25),
-                (-0.25, -0.25),
-                (0.25, 0.25),
-                (0.0, 0.0),
-            ],
-            6 => &[
-                (-0.25, 0.25),
-                (0.25, -0.25),
-                (-0.25, -0.25),
-                (0.25, 0.25),
-                (-0.25, 0.0),
-                (0.25, 0.0),
-            ],
-            7 => &[
-                (-0.25, 0.25),
-                (0.25, -0.25),
-                (-0.25, -0.25),
-                (0.25, 0.25),
-                (-0.25, 0.0),
-                (0.25, 0.0),
-                (0.0, 0.0),
-            ],
-            8 => &[
-                (-0.25, 0.25),
-                (0.25, -0.25),
-                (-0.25, -0.25),
-                (0.25, 0.25),
-                (-0.25, 0.0),
-                (0.25, 0.0),
-                (0.0, -0.25),
-                (0.0, 0.25),
-            ],
-            _ => unreachable!("Something has gone cataclysmically wrong."),
-        };
-        for (dot, (x, z)) in cell.dots.iter().zip(arrangement) {
-            dots.get_mut(*dot).unwrap().translation = Vec3::new(x + cell_x, 0.0, z + cell_z);
-        }
-    }
+    commands
+        .spawn((
+            Orbiter,
+            Transform::default(),
+            TargetTransform(Transform::from_rotation(Quat::from_axis_angle(
+                Vec3::Y,
+                0.0,
+            ))),
+            SmoothingSettings {
+                rotation_decay_rate: 3.0,
+                ..default()
+            },
+            Visibility::Visible,
+        ))
+        .with_children(|commands| {
+            commands.spawn((
+                Camera3d::default(),
+                Camera {
+                    hdr: true,
+                    ..default()
+                },
+                Transform::from_xyz(0.0, max_dim as f32 * 2.0, -(max_dim as f32))
+                    .looking_at(Vec3::ZERO, Vec3::Y),
+                Msaa::Off,
+                TemporalAntiAliasing::default(),
+                ShadowFilteringMethod::Temporal,
+                TargetTransform(
+                    Transform::from_xyz(0.0, max_dim as f32 * 2.0, -(max_dim as f32))
+                        .looking_at(Vec3::ZERO, Vec3::Y),
+                ),
+                SmoothingSettings {
+                    translation_decay_rate: 1.0,
+                    rotation_decay_rate: 1.0,
+                    scale_decay_rate: 1.5,
+                },
+                Bloom::NATURAL,
+            ));
+        });
 }
 
 pub fn ready_for_scatter(
     mut timer: Local<Timer>,
     time: Res<Time>,
-    state: Res<State<GameOperation>>,
+    state: Option<Res<State<GameOperation>>>,
 ) -> bool {
     timer.set_mode(TimerMode::Repeating);
     timer.set_duration(Duration::from_millis(500));
 
-    if *state == GameOperation::Animating {
-        timer.tick(time.delta());
+    if let Some(state) = state {
+        if *state == GameOperation::Animating {
+            timer.tick(time.delta());
 
-        timer.just_finished() || state.is_changed()
+            timer.just_finished() || state.is_changed()
+        } else {
+            timer.reset();
+
+            false
+        }
     } else {
-        timer.reset();
-
         false
     }
 }
-
-#[derive(Component, Reflect)]
-pub struct Bouncing(pub f64);
 
 pub fn scatter_tick(
     mut commands: Commands,
@@ -488,17 +479,23 @@ pub fn scatter_tick(
     )>,
     time: Res<Time>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut end_game: ResMut<NextState<EndGame>>,
 ) {
     let mut scatter_temp = vec![vec![false; grid.width()]; grid.height()];
     let mut do_scatter = false;
+    let mut colors = HashSet::new();
     for (y, row) in grid.iter().enumerate() {
         for (x, &cell) in row.iter().enumerate() {
-            let (cell, meta, _, _, _) = cells.get(cell).unwrap();
+            let (cell, meta, color, _, _) = cells.get(cell).unwrap();
+            colors.insert(color.player);
             if cell.dots.len() > meta.capacity {
                 do_scatter = true;
                 scatter_temp[y][x] = true;
             }
         }
+    }
+    if colors.len() == 1 && !colors.contains(&0) {
+        end_game.set(EndGame { game_ended: true });
     }
     if do_scatter {
         for (y, row) in scatter_temp.iter().enumerate() {
@@ -508,7 +505,7 @@ pub fn scatter_tick(
                         cells.get_mut(grid[y][x]).unwrap();
                     let new_color = *new_color;
                     let material = materials.get_mut(material.id()).unwrap();
-                    material.emissive = LinearRgba::rgb(100.0, 100.0, 100.0);
+                    material.emissive = LinearRgba::rgb(30.0, 30.0, 30.0);
                     transform.translation.y = -0.1;
                     let elapsed = time.elapsed_secs_f64();
                     if x > 0 {
@@ -552,54 +549,22 @@ pub fn scatter_tick(
     }
 }
 
-pub fn animate_cell_colors(
-    cells: Query<(&MeshMaterial3d<StandardMaterial>, &CellColor)>,
-    player_config: Res<Config>,
-    time: Res<Time>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    for (material, color_idx) in &cells {
-        let target_color = if color_idx.player == 0 {
-            GRAY
-        } else {
-            match player_config.players[color_idx.player - 1] {
-                PlayerConfigEntry::Human { color, .. } => color,
-                PlayerConfigEntry::Bot { color, .. } => color,
-            }
-        };
-        if let Color::Srgba(target_color) = target_color {
-            let material = materials.get_mut(material.id()).unwrap();
-            if let Color::Srgba(srgba) = &mut material.base_color {
-                let mut temp = srgba.to_vec4();
-                let target_color_vec = target_color.to_vec4();
-                temp.smooth_nudge(&target_color_vec, 3.0, time.delta_secs());
-                *srgba = Srgba::from_vec4(temp);
-            }
-            let mut temp = material.emissive.to_vec4();
-            temp.smooth_nudge(&Vec4::ZERO, 10.0, time.delta_secs());
-            material.emissive = LinearRgba::from_vec4(temp);
-        }
+pub fn orbit(mut orbiter: Query<&mut TargetTransform, With<Orbiter>>, time: Res<Time>) {
+    if let Ok(mut orbiter) = orbiter.single_mut() {
+        orbiter.rotate_y(time.delta_secs() * 0.1);
     }
 }
 
-pub fn run_bouncing(
-    mut commands: Commands,
-    mut bouncing_objects: Query<(Entity, &Bouncing, &mut TargetTransform, &mut Transform)>,
-    time: Res<Time>,
+pub fn game_ended(
+    mut camera_pos: Query<&mut TargetTransform, With<Camera3d>>,
+    config: Res<Config>,
 ) {
-    let elapsed = time.elapsed_secs_f64();
-    for (entity, bouncing, mut target, mut transform) in &mut bouncing_objects {
-        let t = (elapsed - bouncing.0) as f32;
-        if t < 0.5 {
-            // Directly pilot the ball's height
-            let scalar = (vec2(target.0.translation.x, target.0.translation.z)
-                - vec2(transform.translation.x, transform.translation.z))
-            .length();
-            target.0.translation.y = 16.0 * (t - 2.0 * t * t) * scalar;
-            transform.translation.y = 16.0 * (t - 2.0 * t * t) * scalar;
-        } else {
-            target.0.translation.y = 0.0;
-            commands.entity(entity).remove::<Bouncing>();
-        }
+    if let Ok(mut camera_pos) = camera_pos.single_mut() {
+        let (width, height) = config.grid_size;
+        let max_dim = width.max(height);
+        *camera_pos = TargetTransform(
+            Transform::from_xyz(0.0, max_dim as f32, -2.0 * max_dim as f32)
+                .looking_at(Vec3::ZERO, Vec3::Y),
+        );
     }
 }
