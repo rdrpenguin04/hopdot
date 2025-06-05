@@ -78,8 +78,8 @@ pub struct Dot(Entity);
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect, States)]
 pub enum MainState {
-    MainMenu,
     #[default]
+    MainMenu,
     Game,
 }
 
@@ -195,6 +195,7 @@ fn main() {
             EguiPlugin {
                 enable_multipass_for_primary_context: true,
             },
+            StateInspectorPlugin::<MainState>::default(),
             StateInspectorPlugin::<GameOperation>::default(),
             WorldInspectorPlugin::default(),
         ));
@@ -235,6 +236,7 @@ fn main() {
         .add_systems(Startup, setup_scene)
         .add_systems(OnEnter(EndGame { game_ended: true }), game_ended)
         .add_systems(OnEnter(MainState::Game), fly_in_game)
+        .add_systems(OnEnter(MainState::MainMenu), fly_in_main_menu)
         .add_systems(
             Update,
             ((
@@ -263,7 +265,26 @@ fn main() {
 
 pub const GRAY: Color = Color::Srgba(bevy::color::palettes::tailwind::GRAY_400);
 
-fn fly_in_game() {}
+fn fly_in_game(mut camera_pos: Query<&mut TargetTransform, With<Camera3d>>, config: Res<Config>) {
+    let (width, height) = config.grid_size;
+    let max_dim = width.max(height);
+    if let Ok(mut camera_pos) = camera_pos.single_mut() {
+        **camera_pos = Transform::from_xyz(0.0, max_dim as f32 * 2.0, -(max_dim as f32))
+            .looking_at(Vec3::ZERO, Vec3::Y);
+    }
+}
+
+fn fly_in_main_menu(
+    mut camera_pos: Query<&mut TargetTransform, With<Camera3d>>,
+    mut orbiter: Query<&mut TargetTransform, (With<Orbiter>, Without<Camera3d>)>,
+) {
+    if let Ok(mut camera_pos) = camera_pos.single_mut() {
+        **camera_pos = Transform::from_xyz(0.0, 8.0, 0.0).looking_at(Vec3::ZERO, Vec3::Z);
+    }
+    if let Ok(mut orbiter) = orbiter.single_mut() {
+        orbiter.rotation = Quat::from_axis_angle(Vec3::Y, 0.0);
+    }
+}
 
 fn spawn_dot(x: f32, z: f32, game_assets: &GameAssets) -> impl Bundle {
     (
@@ -351,7 +372,6 @@ fn setup_scene(
     config: Res<Config>,
 ) {
     let (width, height) = config.grid_size;
-    let max_dim = width.max(height);
     grid.new_inplace(width, height);
     for y in 0..height {
         for x in 0..width {
@@ -421,15 +441,11 @@ fn setup_scene(
                     hdr: true,
                     ..default()
                 },
-                Transform::from_xyz(0.0, max_dim as f32 * 2.0, -(max_dim as f32))
-                    .looking_at(Vec3::ZERO, Vec3::Y),
+                Transform::from_xyz(0.0, 8.0, 0.0).looking_at(Vec3::ZERO, Vec3::Z),
                 Msaa::Off,
                 TemporalAntiAliasing::default(),
                 ShadowFilteringMethod::Temporal,
-                TargetTransform(
-                    Transform::from_xyz(0.0, max_dim as f32 * 2.0, -(max_dim as f32))
-                        .looking_at(Vec3::ZERO, Vec3::Y),
-                ),
+                TargetTransform(Transform::from_xyz(0.0, 8.0, 0.0).looking_at(Vec3::ZERO, Vec3::Z)),
                 SmoothingSettings {
                     translation_decay_rate: 1.0,
                     rotation_decay_rate: 1.0,
