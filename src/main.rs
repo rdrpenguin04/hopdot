@@ -242,7 +242,7 @@ fn main() {
                     level: 2,
                 },
             ],
-            grid_size: (8, 4),
+            grid_size: (6, 6),
         })
         .add_systems(Startup, setup_scene)
         .add_systems(OnEnter(EndGame { game_ended: true }), game_ended)
