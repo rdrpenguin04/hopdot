@@ -12,8 +12,7 @@ use bevy_rand::{global::GlobalEntropy, prelude::Entropy};
 use rand::Rng as _;
 
 use crate::{
-    CellColor, CellGrid, Config, CurrentTurn, Dot, DotCell, GameAssets, GameOperation,
-    PlayerConfigEntry, spawn_dot,
+    spawn_dot, CellColor, CellGrid, Config, CurrentTurn, Dot, DotCell, GameAssets, GameOperation, GridTray, PlayerConfigEntry
 };
 
 #[derive(Clone, Copy)]
@@ -155,6 +154,7 @@ pub fn tick_ai(
     mut rng: GlobalEntropy<WyRand>,
     time: Res<Time>,
     mut timer: Local<Timer>,
+    grid_tray: Query<Entity, With<GridTray>>,
 ) {
     if state.is_changed() {
         timer.set_mode(TimerMode::Once);
@@ -220,7 +220,7 @@ pub fn tick_ai(
         ) = cells.get_mut(entity).unwrap();
         commands
             .entity(entity)
-            .with_related::<Dot>(spawn_dot(*x, *z, &game_assets));
+            .with_related::<Dot>((spawn_dot(*x, *z, &game_assets), ChildOf(grid_tray.single().unwrap())));
         color.player = current_player.0;
         timer.reset();
         next_state.set(GameOperation::Animating);

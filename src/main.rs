@@ -79,6 +79,7 @@ pub struct Dot(Entity);
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect, States)]
 pub enum MainState {
     #[default]
+    Splash,
     MainMenu,
     Game,
 }
@@ -125,6 +126,10 @@ pub struct Orbiter;
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect)]
 pub struct NeedsNewBoard(bool);
+
+#[derive(Component)]
+#[require(Transform, Visibility)]
+pub struct GridTray;
 
 impl CellGrid {
     pub fn new(width: usize, height: usize) -> Self {
@@ -236,6 +241,7 @@ fn main() {
         .add_systems(Startup, setup_scene)
         .add_systems(OnEnter(EndGame { game_ended: true }), game_ended)
         .add_systems(OnEnter(MainState::Game), fly_in_game)
+        .add_systems(OnExit(MainState::Game), fly_out_game)
         .add_systems(OnEnter(MainState::MainMenu), fly_in_main_menu)
         .add_systems(
             Update,
@@ -265,12 +271,25 @@ fn main() {
 
 pub const GRAY: Color = Color::Srgba(bevy::color::palettes::tailwind::GRAY_400);
 
-fn fly_in_game(mut camera_pos: Query<&mut TargetTransform, With<Camera3d>>, config: Res<Config>) {
+fn fly_in_game(
+    mut camera_pos: Query<&mut TargetTransform, With<Camera3d>>,
+    config: Res<Config>,
+    mut grid_tray: Query<&mut TargetTransform, (With<GridTray>, Without<Camera3d>)>,
+) {
     let (width, height) = config.grid_size;
     let max_dim = width.max(height);
     if let Ok(mut camera_pos) = camera_pos.single_mut() {
         **camera_pos = Transform::from_xyz(0.0, max_dim as f32 * 2.0, -(max_dim as f32))
             .looking_at(Vec3::ZERO, Vec3::Y);
+    }
+    if let Ok(mut target) = grid_tray.single_mut() {
+        **target = Transform::default();
+    }
+}
+
+fn fly_out_game(mut grid_tray: Query<&mut TargetTransform, With<GridTray>>) {
+    if let Ok(mut target) = grid_tray.single_mut() {
+        target.translation = Vec3::new(0.0, 0.0, -30.0);
     }
 }
 
@@ -302,7 +321,7 @@ fn spawn_dot(x: f32, z: f32, game_assets: &GameAssets) -> impl Bundle {
 }
 
 fn spawn_cell(
-    commands: &mut Commands,
+    commands: &mut ChildSpawnerCommands,
     materials: &mut Assets<StandardMaterial>,
     game_assets: &GameAssets,
     x: f32,
@@ -322,7 +341,7 @@ fn spawn_cell(
             },
             Pickable::default(),
             related!(DotCell[
-                spawn_dot(x, z, game_assets),
+                (spawn_dot(x, z, game_assets), ChildOf(commands.target_entity())),
             ]),
             DotCellMeta { capacity },
         ))
@@ -345,7 +364,8 @@ fn spawn_cell(
                   game_assets: Res<GameAssets>,
                   state: Option<Res<State<GameOperation>>>,
                   next_state: Option<ResMut<NextState<GameOperation>>>,
-                  current_turn: Option<Res<State<CurrentTurn>>>| {
+                  current_turn: Option<Res<State<CurrentTurn>>>,
+                  grid_tray: Query<Entity, With<GridTray>>| {
                 if let (Some(state), Some(mut next_state), Some(current_turn)) =
                     (state, next_state, current_turn)
                     && *state == GameOperation::Human
@@ -353,9 +373,10 @@ fn spawn_cell(
                     let mut color = colors.get_mut(trigger.target).unwrap();
                     if color.player == 0 || color.player == current_turn.0 {
                         color.player = current_turn.0;
-                        commands
-                            .entity(trigger.target)
-                            .with_related::<Dot>(spawn_dot(x, z, &game_assets));
+                        commands.entity(trigger.target).with_related::<Dot>((
+                            spawn_dot(x, z, &game_assets),
+                            ChildOf(grid_tray.single().unwrap()),
+                        ));
                         next_state.set(GameOperation::Animating);
                     }
                 }
@@ -373,27 +394,39 @@ fn setup_scene(
 ) {
     let (width, height) = config.grid_size;
     grid.new_inplace(width, height);
-    for y in 0..height {
-        for x in 0..width {
-            let x_border = x == 0 || x == grid.width() - 1;
-            let y_border = y == 0 || y == grid.height() - 1;
-            let capacity = if x_border && y_border {
-                2
-            } else if x_border || y_border {
-                3
-            } else {
-                4
-            };
-            grid[y][x] = spawn_cell(
-                &mut commands,
-                &mut materials,
-                &game_assets,
-                x as f32 - width as f32 / 2.0 + 0.5,
-                y as f32 - height as f32 / 2.0 + 0.5,
-                capacity,
-            );
-        }
-    }
+    commands
+        .spawn((
+            GridTray,
+            SmoothingSettings {
+                translation_decay_rate: 2.0,
+                ..default()
+            },
+            TargetTransform(Transform::from_xyz(0.0, 30.0, 0.0)),
+            Transform::from_xyz(0.0, 30.0, 0.0),
+        ))
+        .with_children(|commands| {
+            for y in 0..height {
+                for x in 0..width {
+                    let x_border = x == 0 || x == grid.width() - 1;
+                    let y_border = y == 0 || y == grid.height() - 1;
+                    let capacity = if x_border && y_border {
+                        2
+                    } else if x_border || y_border {
+                        3
+                    } else {
+                        4
+                    };
+                    grid[y][x] = spawn_cell(
+                        commands,
+                        &mut materials,
+                        &game_assets,
+                        x as f32 - width as f32 / 2.0 + 0.5,
+                        y as f32 - height as f32 / 2.0 + 0.5,
+                        capacity,
+                    );
+                }
+            }
+        });
 
     commands.spawn((
         SceneRoot(game_assets.table_scene.clone_weak()),
@@ -441,11 +474,11 @@ fn setup_scene(
                     hdr: true,
                     ..default()
                 },
-                Transform::from_xyz(0.0, 8.0, 0.0).looking_at(Vec3::ZERO, Vec3::Z),
+                Transform::from_xyz(0.0, 12.0, -8.0).looking_to(Dir3::Z, Dir3::Y),
                 Msaa::Off,
                 TemporalAntiAliasing::default(),
                 ShadowFilteringMethod::Temporal,
-                TargetTransform(Transform::from_xyz(0.0, 8.0, 0.0).looking_at(Vec3::ZERO, Vec3::Z)),
+                TargetTransform(Transform::from_xyz(0.0, 12.0, -12.0).looking_to(Dir3::Z, Dir3::Y)),
                 SmoothingSettings {
                     translation_decay_rate: 1.0,
                     rotation_decay_rate: 1.0,
@@ -510,7 +543,8 @@ pub fn scatter_tick(
             }
         }
     }
-    if colors.len() == 1 && !colors.contains(&0) {
+    let game_over = colors.len() == 1 && !colors.contains(&0);
+    if game_over {
         end_game.set(EndGame { game_ended: true });
     }
     if do_scatter {
@@ -555,7 +589,7 @@ pub fn scatter_tick(
                 }
             }
         }
-    } else {
+    } else if !game_over { // Check so we keep orbiting if the game has ended
         let next_turn_idx = current_turn.0 % player_config.players.len();
         next_state.set(match player_config.players[next_turn_idx] {
             PlayerConfigEntry::Bot { .. } => GameOperation::Bot,
