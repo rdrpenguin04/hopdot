@@ -99,8 +99,7 @@ pub struct EndGame {
     game_ended: bool,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect, SubStates)]
-#[source(MainState = MainState::Game)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect, States)]
 pub struct CurrentTurn(usize);
 
 #[derive(Clone, Reflect)]
@@ -124,8 +123,14 @@ pub struct CellGrid {
 #[derive(Component)]
 pub struct Orbiter;
 
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect)]
-pub struct NeedsNewBoard(bool);
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Reflect, States)]
+pub struct NeedNewBoard(bool);
+
+impl Default for NeedNewBoard {
+    fn default() -> Self {
+        Self(true)
+    }
+}
 
 #[derive(Component)]
 #[require(Transform, Visibility)]
@@ -193,7 +198,7 @@ fn main() {
     {
         use bevy_inspector_egui::{
             bevy_egui::EguiPlugin,
-            quick::{StateInspectorPlugin, WorldInspectorPlugin},
+            quick::{ResourceInspectorPlugin, StateInspectorPlugin},
         };
 
         app.add_plugins((
@@ -201,8 +206,9 @@ fn main() {
                 enable_multipass_for_primary_context: true,
             },
             StateInspectorPlugin::<MainState>::default(),
-            StateInspectorPlugin::<GameOperation>::default(),
-            WorldInspectorPlugin::default(),
+            StateInspectorPlugin::<CurrentTurn>::default(),
+            StateInspectorPlugin::<NeedNewBoard>::default(),
+            ResourceInspectorPlugin::<Config>::default(),
         ));
     }
 
@@ -236,7 +242,7 @@ fn main() {
                     level: 2,
                 },
             ],
-            grid_size: (4, 4),
+            grid_size: (8, 4),
         })
         .add_systems(Startup, setup_scene)
         .add_systems(OnEnter(EndGame { game_ended: true }), game_ended)
@@ -253,8 +259,9 @@ fn main() {
                 .run_if(in_state(MainState::Game)),),
         )
         .init_state::<MainState>()
+        .init_state::<NeedNewBoard>()
+        .init_state::<CurrentTurn>()
         .add_sub_state::<GameOperation>()
-        .add_sub_state::<CurrentTurn>()
         .add_sub_state::<EndGame>()
         .register_type::<GameAssets>()
         .register_type::<CellColor>()
@@ -272,18 +279,73 @@ fn main() {
 pub const GRAY: Color = Color::Srgba(bevy::color::palettes::tailwind::GRAY_400);
 
 fn fly_in_game(
+    mut commands: Commands,
     mut camera_pos: Query<&mut TargetTransform, With<Camera3d>>,
     config: Res<Config>,
-    mut grid_tray: Query<&mut TargetTransform, (With<GridTray>, Without<Camera3d>)>,
+    mut grid_tray: Query<(Entity, &mut TargetTransform), (With<GridTray>, Without<Camera3d>)>,
+    need_new_board: Res<State<NeedNewBoard>>,
+    mut next_need_new_board: ResMut<NextState<NeedNewBoard>>,
+    mut grid: ResMut<CellGrid>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    game_assets: Res<GameAssets>,
+    mut next_turn: ResMut<NextState<CurrentTurn>>,
+    named_entities: Query<(Entity, &Name)>,
 ) {
     let (width, height) = config.grid_size;
-    let max_dim = width.max(height);
+    let max_dim = (width * 2 / 3).max(height);
+    let true_max_dim = width.max(height);
     if let Ok(mut camera_pos) = camera_pos.single_mut() {
         **camera_pos = Transform::from_xyz(0.0, max_dim as f32 * 2.0, -(max_dim as f32))
             .looking_at(Vec3::ZERO, Vec3::Y);
     }
-    if let Ok(mut target) = grid_tray.single_mut() {
-        **target = Transform::default();
+    for (table, name) in named_entities {
+        if name.as_str() == "Table" {
+            let scale = (true_max_dim + 2) as f32 / 8.0;
+            commands.entity(table).insert((
+                SmoothingSettings {
+                    scale_decay_rate: 2.0,
+                    ..default()
+                },
+                TargetTransform(Transform::from_scale(vec3(scale, 1.0, scale))),
+            ));
+        }
+    }
+    let Ok((grid_tray, mut target)) = grid_tray.single_mut() else {
+        return;
+    };
+    **target = Transform::default();
+
+    if need_new_board.0 {
+        let (width, height) = config.grid_size;
+        grid.new_inplace(width, height);
+        commands
+            .entity(grid_tray)
+            .despawn_related::<Children>()
+            .with_children(|commands| {
+                for y in 0..height {
+                    for x in 0..width {
+                        let x_border = x == 0 || x == grid.width() - 1;
+                        let y_border = y == 0 || y == grid.height() - 1;
+                        let capacity = if x_border && y_border {
+                            2
+                        } else if x_border || y_border {
+                            3
+                        } else {
+                            4
+                        };
+                        grid[y][x] = spawn_cell(
+                            commands,
+                            &mut materials,
+                            &game_assets,
+                            x as f32 - width as f32 / 2.0 + 0.5,
+                            y as f32 - height as f32 / 2.0 + 0.5,
+                            capacity,
+                        );
+                    }
+                }
+            });
+        next_need_new_board.set(NeedNewBoard(false));
+        next_turn.set(CurrentTurn(0));
     }
 }
 
@@ -294,11 +356,24 @@ fn fly_out_game(mut grid_tray: Query<&mut TargetTransform, With<GridTray>>) {
 }
 
 fn fly_in_main_menu(
+    mut commands: Commands,
     mut camera_pos: Query<&mut TargetTransform, With<Camera3d>>,
     mut orbiter: Query<&mut TargetTransform, (With<Orbiter>, Without<Camera3d>)>,
+    named_entities: Query<(Entity, &Name)>,
 ) {
+    for (table, name) in named_entities {
+        if name.as_str() == "Table" {
+            commands.entity(table).insert((
+                SmoothingSettings {
+                    scale_decay_rate: 2.0,
+                    ..default()
+                },
+                TargetTransform(Transform::from_scale(vec3(1.0, 1.0, 1.0))),
+            ));
+        }
+    }
     if let Ok(mut camera_pos) = camera_pos.single_mut() {
-        **camera_pos = Transform::from_xyz(0.0, 8.0, 0.0).looking_at(Vec3::ZERO, Vec3::Z);
+        **camera_pos = Transform::from_xyz(0.0, 12.0, 0.0).looking_at(Vec3::ZERO, Vec3::Z);
     }
     if let Ok(mut orbiter) = orbiter.single_mut() {
         orbiter.rotation = Quat::from_axis_angle(Vec3::Y, 0.0);
@@ -385,48 +460,16 @@ fn spawn_cell(
         .id()
 }
 
-fn setup_scene(
-    mut commands: Commands,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut grid: ResMut<CellGrid>,
-    game_assets: Res<GameAssets>,
-    config: Res<Config>,
-) {
-    let (width, height) = config.grid_size;
-    grid.new_inplace(width, height);
-    commands
-        .spawn((
-            GridTray,
-            SmoothingSettings {
-                translation_decay_rate: 2.0,
-                ..default()
-            },
-            TargetTransform(Transform::from_xyz(0.0, 30.0, 0.0)),
-            Transform::from_xyz(0.0, 30.0, 0.0),
-        ))
-        .with_children(|commands| {
-            for y in 0..height {
-                for x in 0..width {
-                    let x_border = x == 0 || x == grid.width() - 1;
-                    let y_border = y == 0 || y == grid.height() - 1;
-                    let capacity = if x_border && y_border {
-                        2
-                    } else if x_border || y_border {
-                        3
-                    } else {
-                        4
-                    };
-                    grid[y][x] = spawn_cell(
-                        commands,
-                        &mut materials,
-                        &game_assets,
-                        x as f32 - width as f32 / 2.0 + 0.5,
-                        y as f32 - height as f32 / 2.0 + 0.5,
-                        capacity,
-                    );
-                }
-            }
-        });
+fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>) {
+    commands.spawn((
+        GridTray,
+        SmoothingSettings {
+            translation_decay_rate: 2.0,
+            ..default()
+        },
+        TargetTransform(Transform::from_xyz(0.0, 30.0, 0.0)),
+        Transform::from_xyz(0.0, 30.0, 0.0),
+    ));
 
     commands.spawn((
         SceneRoot(game_assets.table_scene.clone_weak()),
@@ -529,6 +572,8 @@ pub fn scatter_tick(
     time: Res<Time>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut end_game: ResMut<NextState<EndGame>>,
+    need_new_board: Res<State<NeedNewBoard>>,
+    mut next_need_new_board: ResMut<NextState<NeedNewBoard>>,
 ) {
     let mut scatter_temp = vec![vec![false; grid.width()]; grid.height()];
     let mut do_scatter = false;
@@ -546,6 +591,7 @@ pub fn scatter_tick(
     let game_over = colors.len() == 1 && !colors.contains(&0);
     if game_over {
         end_game.set(EndGame { game_ended: true });
+        next_need_new_board.set(NeedNewBoard(true));
     }
     if do_scatter {
         for (y, row) in scatter_temp.iter().enumerate() {
@@ -589,7 +635,8 @@ pub fn scatter_tick(
                 }
             }
         }
-    } else if !game_over { // Check so we keep orbiting if the game has ended
+    } else if !game_over && !need_new_board.0 {
+        // Check so we keep orbiting if the game has ended and don't do stupid stuff if we need a new board
         let next_turn_idx = current_turn.0 % player_config.players.len();
         next_state.set(match player_config.players[next_turn_idx] {
             PlayerConfigEntry::Bot { .. } => GameOperation::Bot,
@@ -611,7 +658,7 @@ pub fn game_ended(
 ) {
     if let Ok(mut camera_pos) = camera_pos.single_mut() {
         let (width, height) = config.grid_size;
-        let max_dim = width.max(height);
+        let max_dim = (width * 2 / 3).max(height);
         *camera_pos = TargetTransform(
             Transform::from_xyz(0.0, max_dim as f32, -2.0 * max_dim as f32)
                 .looking_at(Vec3::ZERO, Vec3::Y),
