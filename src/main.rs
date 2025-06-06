@@ -80,12 +80,11 @@ pub struct Dot(Entity);
 pub enum MainState {
     #[default]
     Splash,
-    MainMenu,
+    Menu,
     Game,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect, SubStates)]
-#[source(MainState = MainState::Game)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect, States)]
 pub enum GameOperation {
     #[default]
     Animating,
@@ -135,6 +134,13 @@ impl Default for NeedNewBoard {
 #[derive(Component)]
 #[require(Transform, Visibility)]
 pub struct GridTray;
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect, States)]
+pub enum MenuState {
+    #[default]
+    Main,
+    Pause,
+}
 
 impl CellGrid {
     pub fn new(width: usize, height: usize) -> Self {
@@ -245,23 +251,33 @@ fn main() {
             grid_size: (6, 6),
         })
         .add_systems(Startup, setup_scene)
-        .add_systems(OnEnter(EndGame { game_ended: true }), game_ended)
         .add_systems(OnEnter(MainState::Game), fly_in_game)
         .add_systems(OnExit(MainState::Game), fly_out_game)
-        .add_systems(OnEnter(MainState::MainMenu), fly_in_main_menu)
+        .add_systems(
+            OnEnter(MainState::Menu),
+            (
+                fly_in_main_menu,
+                |mut end_game: ResMut<NextState<EndGame>>| {
+                    // Defend against some nonsense
+                    end_game.set(EndGame { game_ended: false });
+                },
+            ),
+        )
         .add_systems(
             Update,
             ((
                 ai::tick_ai,
                 scatter_tick.run_if(ready_for_scatter),
-                orbit.run_if(in_state(EndGame { game_ended: true })),
+                (orbit, game_ended).run_if(in_state(EndGame { game_ended: true })),
+                esc_to_menu,
             )
                 .run_if(in_state(MainState::Game)),),
         )
         .init_state::<MainState>()
         .init_state::<NeedNewBoard>()
         .init_state::<CurrentTurn>()
-        .add_sub_state::<GameOperation>()
+        .init_state::<GameOperation>()
+        .init_state::<MenuState>()
         .add_sub_state::<EndGame>()
         .register_type::<GameAssets>()
         .register_type::<CellColor>()
@@ -278,11 +294,27 @@ fn main() {
 
 pub const GRAY: Color = Color::Srgba(bevy::color::palettes::tailwind::GRAY_400);
 
+fn esc_to_menu(
+    key_input: Res<ButtonInput<KeyCode>>,
+    mut next_need_new_board: ResMut<NextState<NeedNewBoard>>,
+    mut main_state: ResMut<NextState<MainState>>,
+    mut menu_state: ResMut<NextState<MenuState>>,
+) {
+    if key_input.just_pressed(KeyCode::Escape) {
+        next_need_new_board.set(NeedNewBoard(false)); // So we don't accidentally reset the board coming back from pause
+        main_state.set(MainState::Menu);
+        menu_state.set(MenuState::Pause);
+    }
+}
+
 fn fly_in_game(
     mut commands: Commands,
     mut camera_pos: Query<&mut TargetTransform, With<Camera3d>>,
     config: Res<Config>,
-    mut grid_tray: Query<(Entity, &mut TargetTransform), (With<GridTray>, Without<Camera3d>)>,
+    mut grid_tray: Query<
+        (Entity, &mut Transform, &mut TargetTransform),
+        (With<GridTray>, Without<Camera3d>),
+    >,
     need_new_board: Res<State<NeedNewBoard>>,
     mut next_need_new_board: ResMut<NextState<NeedNewBoard>>,
     mut grid: ResMut<CellGrid>,
@@ -290,6 +322,7 @@ fn fly_in_game(
     game_assets: Res<GameAssets>,
     mut next_turn: ResMut<NextState<CurrentTurn>>,
     named_entities: Query<(Entity, &Name)>,
+    mut game_operation: ResMut<NextState<GameOperation>>,
 ) {
     let (width, height) = config.grid_size;
     let max_dim = (width * 2 / 3).max(height);
@@ -310,7 +343,7 @@ fn fly_in_game(
             ));
         }
     }
-    let Ok((grid_tray, mut target)) = grid_tray.single_mut() else {
+    let Ok((grid_tray, mut transform, mut target)) = grid_tray.single_mut() else {
         return;
     };
     **target = Transform::default();
@@ -344,6 +377,8 @@ fn fly_in_game(
                     }
                 }
             });
+        game_operation.set(GameOperation::Animating);
+        transform.translation = vec3(0.0, 30.0, 0.0);
         next_need_new_board.set(NeedNewBoard(false));
         next_turn.set(CurrentTurn(0));
     }
