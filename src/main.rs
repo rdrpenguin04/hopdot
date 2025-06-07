@@ -11,7 +11,6 @@ use bevy::{
         bloom::Bloom,
         experimental::taa::{TemporalAntiAliasPlugin, TemporalAntiAliasing},
     },
-    ecs::query::QueryData,
     pbr::ShadowFilteringMethod,
     platform::collections::HashSet,
     prelude::*,
@@ -225,7 +224,7 @@ fn main() {
     {
         use bevy_inspector_egui::{
             bevy_egui::EguiPlugin,
-            quick::{AssetInspectorPlugin, StateInspectorPlugin, WorldInspectorPlugin},
+            quick::{StateInspectorPlugin, WorldInspectorPlugin},
         };
 
         app.add_plugins((
