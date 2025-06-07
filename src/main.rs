@@ -11,6 +11,7 @@ use bevy::{
         bloom::Bloom,
         experimental::taa::{TemporalAntiAliasPlugin, TemporalAntiAliasing},
     },
+    ecs::query::QueryData,
     pbr::ShadowFilteringMethod,
     platform::collections::HashSet,
     prelude::*,
@@ -22,35 +23,46 @@ use crate::anim::{Bouncing, SmoothingSettings, TargetTransform};
 
 #[derive(Resource, Reflect)]
 pub struct GameAssets {
+    table_scene: Handle<Scene>,
     dot_mesh: Handle<Mesh>,
     tile_mesh: Handle<Mesh>,
-    table_scene: Handle<Scene>,
-    bold_font: Handle<Font>,
-    mono_font: Handle<Font>,
+    splash_mesh: Handle<Mesh>,
     dot_color: Handle<StandardMaterial>,
+    splash_material: Handle<StandardMaterial>,
 }
 
 impl FromWorld for GameAssets {
     fn from_world(world: &mut World) -> Self {
+        let asset_server = world.resource::<AssetServer>();
+
+        let table_scene =
+            asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/table.glb"));
+
+        let splash_image = asset_server.load("tex/splash.png");
+
         let mut meshes = world.resource_mut::<Assets<_>>();
         let dot_mesh = meshes.add(Sphere::new(0.1));
         let tile_mesh = meshes.add(Cuboid::new(0.95, 0.1, 0.95));
-
-        let asset_server = world.resource::<AssetServer>();
-        let table_scene =
-            asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/table.glb"));
-        let bold_font = asset_server.load("fonts/FiraSans-Bold.ttf");
-        let mono_font = asset_server.load("fonts/FiraMono-Medium.ttf");
+        let splash_mesh = meshes.add(Rectangle::new(7.2, 4.0));
 
         let mut materials = world.resource_mut::<Assets<_>>();
         let dot_color = materials.add(Color::srgb(1.0, 1.0, 1.0));
+        let splash_material = materials.add(StandardMaterial {
+            base_color: Color::linear_rgba(1.0, 1.0, 1.0, 0.0),
+            base_color_texture: Some(splash_image.clone()),
+            emissive: LinearRgba::new(0.0, 0.0, 0.0, 1.0),
+            emissive_texture: Some(splash_image),
+            alpha_mode: AlphaMode::Blend,
+            ..default()
+        });
+
         Self {
+            table_scene,
             dot_mesh,
             tile_mesh,
-            table_scene,
-            bold_font,
-            mono_font,
+            splash_mesh,
             dot_color,
+            splash_material,
         }
     }
 }
@@ -135,7 +147,16 @@ impl Default for NeedNewBoard {
 #[require(Transform, Visibility)]
 pub struct GridTray;
 
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect, States)]
+#[derive(Component)]
+#[require(TargetTransform(Transform::default()), SmoothingSettings { translation_decay_rate: 3.0, scale_decay_rate: 10.0, ..default() }, Visibility::Hidden)]
+pub struct MenuElement {
+    for_menu: MenuState,
+    target: Transform,
+    side: f32, // -1.0 or 1.0, probably
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect, SubStates)]
+#[source(MainState = MainState::Menu)]
 pub enum MenuState {
     #[default]
     Main,
@@ -204,7 +225,7 @@ fn main() {
     {
         use bevy_inspector_egui::{
             bevy_egui::EguiPlugin,
-            quick::{ResourceInspectorPlugin, StateInspectorPlugin},
+            quick::{AssetInspectorPlugin, StateInspectorPlugin, WorldInspectorPlugin},
         };
 
         app.add_plugins((
@@ -214,7 +235,7 @@ fn main() {
             StateInspectorPlugin::<MainState>::default(),
             StateInspectorPlugin::<CurrentTurn>::default(),
             StateInspectorPlugin::<NeedNewBoard>::default(),
-            ResourceInspectorPlugin::<Config>::default(),
+            WorldInspectorPlugin::default(),
         ));
     }
 
@@ -227,57 +248,74 @@ fn main() {
         .insert_resource(ClearColor(Color::srgb_u8(33, 34, 37)))
         .insert_resource(Config {
             players: vec![
-                PlayerConfigEntry::Human {
-                    color: Color::srgb(0.0, 1.0, 0.0),
-                    name: "Player 1".into(),
-                },
+                // PlayerConfigEntry::Human {
+                //     color: Color::srgb(0.0, 1.0, 0.0),
+                //     name: "Player 1".into(),
+                // },
                 // PlayerConfigEntry::Human {
                 //     color: Color::srgb(0.0, 0.0, 1.0),
                 //     name: "Player 2".into(),
                 // },
-                // PlayerConfigEntry::Bot {
-                //     color: Color::srgb(0.0, 1.0, 0.0),
-                //     level: 0,
-                // },
-                // PlayerConfigEntry::Bot {
-                //     color: Color::srgb(1.0, 0.0, 0.0),
-                //     level: 1,
-                // },
+                PlayerConfigEntry::Bot {
+                    color: Color::srgb(1.0, 0.0, 0.0),
+                    level: 2,
+                },
+                PlayerConfigEntry::Bot {
+                    color: Color::srgb(0.0, 1.0, 1.0),
+                    level: 2,
+                },
+                PlayerConfigEntry::Bot {
+                    color: Color::srgb(0.0, 1.0, 0.0),
+                    level: 2,
+                },
                 PlayerConfigEntry::Bot {
                     color: Color::srgb(0.0, 0.0, 1.0),
                     level: 2,
                 },
             ],
-            grid_size: (6, 6),
+            grid_size: (12, 12),
         })
         .add_systems(Startup, setup_scene)
         .add_systems(OnEnter(MainState::Game), fly_in_game)
         .add_systems(OnExit(MainState::Game), fly_out_game)
         .add_systems(
+            Update,
+            switch_menus.run_if(state_changed::<MenuState>.or(state_changed::<MainState>)),
+        )
+        .add_systems(
             OnEnter(MainState::Menu),
-            (
-                fly_in_main_menu,
-                |mut end_game: ResMut<NextState<EndGame>>| {
-                    // Defend against some nonsense
-                    end_game.set(EndGame { game_ended: false });
-                },
-            ),
+            (fly_to_menu, |mut end_game: ResMut<NextState<EndGame>>| {
+                // Defend against some nonsense
+                end_game.set(EndGame { game_ended: false });
+            }),
         )
         .add_systems(
             Update,
-            ((
+            (|key_input: Res<ButtonInput<KeyCode>>,
+              mut main_state: ResMut<NextState<MainState>>| {
+                if key_input.just_pressed(KeyCode::Escape) {
+                    main_state.set(MainState::Game);
+                }
+            })
+            .run_if(in_state(MenuState::Pause)),
+        )
+        .add_systems(
+            Update,
+            (
                 ai::tick_ai,
                 scatter_tick.run_if(ready_for_scatter),
                 (orbit, game_ended).run_if(in_state(EndGame { game_ended: true })),
                 esc_to_menu,
             )
-                .run_if(in_state(MainState::Game)),),
+                .run_if(in_state(MainState::Game)),
         )
+        .add_systems(Update, run_splash)
+        .add_systems(Update, cleanup_menus)
         .init_state::<MainState>()
         .init_state::<NeedNewBoard>()
         .init_state::<CurrentTurn>()
         .init_state::<GameOperation>()
-        .init_state::<MenuState>()
+        .add_sub_state::<MenuState>()
         .add_sub_state::<EndGame>()
         .register_type::<GameAssets>()
         .register_type::<CellColor>()
@@ -293,6 +331,106 @@ fn main() {
 }
 
 pub const GRAY: Color = Color::Srgba(bevy::color::palettes::tailwind::GRAY_400);
+
+#[derive(Component)]
+pub struct Splash;
+
+fn switch_menus(
+    cur_menu: Option<Res<State<MenuState>>>,
+    mut prev_menu: Local<Option<MenuState>>,
+    menu_elements: Query<(
+        &MenuElement,
+        &mut TargetTransform,
+        &mut Transform,
+        &mut Visibility,
+    )>,
+) {
+    for (el, mut target, mut transform, mut visibility) in menu_elements {
+        if *prev_menu == Some(el.for_menu) {
+            // Fly out
+            let mut new_transform = el.target;
+            new_transform.translation += vec3(0.0, 0.0, -20.0);
+            target.0 = new_transform;
+        }
+        if let Some(ref cur_menu) = cur_menu
+            && **cur_menu == el.for_menu
+        {
+            // Fly in
+            let mut new_transform = el.target;
+            new_transform.translation += el.side * vec3(20.0, 0.0, 0.0);
+            *transform = new_transform;
+            target.0 = el.target;
+            *visibility = Visibility::Inherited;
+        }
+    }
+    *prev_menu = cur_menu.map(|x| **x);
+}
+
+fn cleanup_menus(
+    cur_menu: Option<Res<State<MenuState>>>,
+    mut prev_menu: Local<Option<MenuState>>,
+    menu_elements: Query<(&MenuElement, &mut Visibility)>,
+    mut timer: Local<Timer>,
+    time: Res<Time>,
+) {
+    timer.set_duration(Duration::from_secs(1));
+    if cur_menu.as_ref().map(|x| ***x) != *prev_menu {
+        timer.reset();
+    }
+    timer.tick(time.delta());
+    if timer.just_finished() {
+        for (el, mut visibility) in menu_elements {
+            if cur_menu.as_ref().map(|x| ***x) != Some(el.for_menu) {
+                *visibility = Visibility::Hidden;
+            }
+        }
+    }
+    *prev_menu = cur_menu.map(|x| **x);
+}
+
+fn run_splash(
+    splash: Query<&MeshMaterial3d<StandardMaterial>, With<Splash>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    cur_state: Res<State<MainState>>,
+    mut next_state: ResMut<NextState<MainState>>,
+    time: Res<Time>,
+) {
+    let Ok(splash_material) = splash.single() else {
+        return;
+    };
+    let Some(splash_material) = materials.get_mut(splash_material.id()) else {
+        return;
+    };
+    if **cur_state != MainState::Splash {
+        let Color::LinearRgba(base_color) = splash_material.base_color else {
+            return;
+        };
+
+        let mut tmp = base_color.to_vec4();
+        tmp.smooth_nudge(&Vec4::ZERO, 3.0, time.delta_secs());
+        splash_material.base_color = Color::LinearRgba(LinearRgba::from_vec4(tmp));
+
+        let mut tmp = splash_material.emissive.to_vec4();
+        tmp.smooth_nudge(&Vec4::ZERO, 3.0, time.delta_secs());
+        splash_material.emissive = LinearRgba::from_vec4(tmp);
+        return;
+    }
+    match time.elapsed_secs() {
+        0.0..0.5 => {} // Wait for a bit to spin up materials
+        x @ 0.5..1.5 => {
+            splash_material.base_color = Color::linear_rgba(1.0, 1.0, 1.0, x - 0.5);
+            splash_material.emissive = LinearRgba::WHITE * ((x - 0.5) * 10.0).exp_m1() * 0.007;
+        }
+        1.5..4.0 => {
+            splash_material.base_color = Color::WHITE;
+            let mut tmp = splash_material.emissive.to_vec4();
+            tmp.smooth_nudge(&Vec4::ONE, 3.0, time.delta_secs());
+            splash_material.emissive = LinearRgba::from_vec4(tmp);
+        }
+        4.0.. => next_state.set(MainState::Menu),
+        _ => {} // IDK what happened here
+    }
+}
 
 fn esc_to_menu(
     key_input: Res<ButtonInput<KeyCode>>,
@@ -328,7 +466,7 @@ fn fly_in_game(
     let max_dim = (width * 2 / 3).max(height);
     let true_max_dim = width.max(height);
     if let Ok(mut camera_pos) = camera_pos.single_mut() {
-        **camera_pos = Transform::from_xyz(0.0, max_dim as f32 * 2.0, -(max_dim as f32))
+        **camera_pos = Transform::from_xyz(0.0, max_dim as f32 * 2.0, max_dim as f32)
             .looking_at(Vec3::ZERO, Vec3::Y);
     }
     for (table, name) in named_entities {
@@ -386,11 +524,11 @@ fn fly_in_game(
 
 fn fly_out_game(mut grid_tray: Query<&mut TargetTransform, With<GridTray>>) {
     if let Ok(mut target) = grid_tray.single_mut() {
-        target.translation = Vec3::new(0.0, 0.0, -30.0);
+        target.translation = Vec3::new(0.0, 0.0, 30.0);
     }
 }
 
-fn fly_in_main_menu(
+fn fly_to_menu(
     mut commands: Commands,
     mut camera_pos: Query<&mut TargetTransform, With<Camera3d>>,
     mut orbiter: Query<&mut TargetTransform, (With<Orbiter>, Without<Camera3d>)>,
@@ -408,7 +546,7 @@ fn fly_in_main_menu(
         }
     }
     if let Ok(mut camera_pos) = camera_pos.single_mut() {
-        **camera_pos = Transform::from_xyz(0.0, 12.0, 0.0).looking_at(Vec3::ZERO, Vec3::Z);
+        **camera_pos = Transform::from_xyz(0.0, 12.0, 0.0).looking_at(Vec3::ZERO, Vec3::NEG_Z);
     }
     if let Ok(mut orbiter) = orbiter.single_mut() {
         orbiter.rotation = Quat::from_axis_angle(Vec3::Y, 0.0);
@@ -495,7 +633,89 @@ fn spawn_cell(
         .id()
 }
 
-fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>) {
+fn add_hover_observers(entity_commands: &mut EntityCommands) {
+    let id = entity_commands.id();
+    entity_commands
+        .observe(
+            move |_: Trigger<Pointer<Over>>, mut targets: Query<&mut TargetTransform>| {
+                targets.get_mut(id).unwrap().scale = Vec3::splat(1.05);
+            },
+        )
+        .observe(
+            move |_: Trigger<Pointer<Out>>, mut targets: Query<&mut TargetTransform>| {
+                targets.get_mut(id).unwrap().scale = Vec3::splat(1.0);
+            },
+        );
+}
+
+fn setup_scene(
+    mut commands: Commands,
+    game_assets: Res<GameAssets>,
+    asset_server: Res<AssetServer>,
+) {
+    commands.spawn((
+        Mesh3d(game_assets.splash_mesh.clone_weak()),
+        MeshMaterial3d(game_assets.splash_material.clone_weak()),
+        Transform::from_xyz(0.0, 12.0, 8.0).looking_to(Dir3::NEG_Z, Dir3::Y),
+        Splash,
+    ));
+
+    commands.spawn((
+        SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/hopdot.glb"))),
+        MenuElement {
+            for_menu: MenuState::Main,
+            target: Transform::from_xyz(-3.5, -0.2, -3.0),
+            side: -1.0,
+        },
+    ));
+
+    add_hover_observers(
+        commands
+            .spawn((
+                SceneRoot(
+                    asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/start-game.glb")),
+                ),
+                MenuElement {
+                    for_menu: MenuState::Main,
+                    target: Transform::from_xyz(-3.5, -0.2, -1.5),
+                    side: -1.0,
+                },
+            ))
+            .observe(
+                |_: Trigger<Pointer<Click>>, mut next_state: ResMut<NextState<MainState>>| {
+                    next_state.set(MainState::Game);
+                },
+            ),
+    );
+
+    add_hover_observers(
+        commands
+            .spawn((
+                SceneRoot(
+                    asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/credits.glb")),
+                ),
+                MenuElement {
+                    for_menu: MenuState::Main,
+                    target: Transform::from_xyz(2.05, -0.2, 3.5),
+                    side: 1.0,
+                },
+            ))
+            .observe(
+                |_: Trigger<Pointer<Click>>, mut next_state: ResMut<NextState<MainState>>| {
+                    next_state.set(MainState::Game);
+                },
+            ),
+    );
+
+    commands.spawn((
+        SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/gamepaused.glb"))),
+        MenuElement {
+            for_menu: MenuState::Pause,
+            target: Transform::from_xyz(-3.5, -0.2, -3.0),
+            side: -1.0,
+        },
+    ));
+
     commands.spawn((
         GridTray,
         SmoothingSettings {
@@ -552,17 +772,19 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>) {
                     hdr: true,
                     ..default()
                 },
-                Transform::from_xyz(0.0, 12.0, -8.0).looking_to(Dir3::Z, Dir3::Y),
+                Transform::from_xyz(0.0, 12.0, 16.0).looking_to(Dir3::NEG_Z, Dir3::Y),
                 Msaa::Off,
                 TemporalAntiAliasing::default(),
                 ShadowFilteringMethod::Temporal,
-                TargetTransform(Transform::from_xyz(0.0, 12.0, -12.0).looking_to(Dir3::Z, Dir3::Y)),
+                TargetTransform(
+                    Transform::from_xyz(0.0, 12.0, 20.0).looking_to(Dir3::NEG_Z, Dir3::Y),
+                ),
                 SmoothingSettings {
                     translation_decay_rate: 1.0,
                     rotation_decay_rate: 1.0,
                     scale_decay_rate: 1.5,
                 },
-                Bloom::NATURAL,
+                Bloom::ANAMORPHIC,
             ));
         });
 }
@@ -695,7 +917,7 @@ pub fn game_ended(
         let (width, height) = config.grid_size;
         let max_dim = (width * 2 / 3).max(height);
         *camera_pos = TargetTransform(
-            Transform::from_xyz(0.0, max_dim as f32, -2.0 * max_dim as f32)
+            Transform::from_xyz(0.0, max_dim as f32, 2.0 * max_dim as f32)
                 .looking_at(Vec3::ZERO, Vec3::Y),
         );
     }

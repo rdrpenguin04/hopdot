@@ -1378,18 +1378,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bevy_text_mesh"
-version = "0.13.0"
-source = "git+https://github.com/Cyannide/bevy_text_mesh?branch=bevy-0.16#d7d08397dfdc4ce560fc397b9b302a09450573ac"
-dependencies = [
- "anyhow",
- "bevy",
- "bitflags 2.9.1",
- "glyph_brush_layout",
- "ttf2mesh",
-]
-
-[[package]]
 name = "bevy_time"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1520,29 +1508,6 @@ dependencies = [
  "web-sys",
  "wgpu-types",
  "winit",
-]
-
-[[package]]
-name = "bindgen"
-version = "0.69.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "271383c67ccabffb7381723dea0672a673f292304fcb45c01cc648c7a8d58088"
-dependencies = [
- "bitflags 2.9.1",
- "cexpr",
- "clang-sys",
- "itertools 0.12.1",
- "lazy_static",
- "lazycell",
- "log",
- "prettyplease",
- "proc-macro2",
- "quote",
- "regex",
- "rustc-hash",
- "shlex",
- "syn",
- "which",
 ]
 
 [[package]]
@@ -1953,7 +1918,7 @@ version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2ce857aa0b77d77287acc1ac3e37a05a8c95a2af3647d23b15f263bdaeb7562b"
 dependencies = [
- "bindgen 0.70.1",
+ "bindgen",
 ]
 
 [[package]]
@@ -2657,17 +2622,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "glyph_brush_layout"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b1e288bfd2f6c0313f78bf5aa538356ad481a3bb97e9b7f93220ab0066c5992"
-dependencies = [
- "ab_glyph",
- "approx",
- "xi-unicode",
-]
-
-[[package]]
 name = "gpu-alloc"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2805,15 +2759,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 
 [[package]]
-name = "home"
-version = "0.5.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "589533453244b0995c858700322199b2becb13b627df2851f64a2775d024abcf"
-dependencies = [
- "windows-sys 0.59.0",
-]
-
-[[package]]
 name = "hopdot"
 version = "0.1.0"
 dependencies = [
@@ -2821,7 +2766,6 @@ dependencies = [
  "bevy-inspector-egui",
  "bevy_prng",
  "bevy_rand",
- "bevy_text_mesh",
  "log",
  "rand 0.9.1",
 ]
@@ -3044,12 +2988,6 @@ name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
-
-[[package]]
-name = "lazycell"
-version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 
 [[package]]
 name = "lebe"
@@ -4997,7 +4935,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "528bdd1f0e27b5dd9a4ededf154e824b0532731e4af73bb531de46276e0aab1e"
 dependencies = [
- "bindgen 0.70.1",
+ "bindgen",
  "cc",
  "cfg-if",
  "once_cell",
@@ -5052,25 +4990,6 @@ name = "ttf-parser"
 version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
-
-[[package]]
-name = "ttf2mesh"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea8e67ed963a15e18ed49a41416e75fb33db3d85bd44fc556aba08413ae8bb01"
-dependencies = [
- "ttf2mesh-sys",
-]
-
-[[package]]
-name = "ttf2mesh-sys"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "321e25aedb67342412ebe072dd3e40649f87330aaaf4fca72ef3ce1cdd263a4f"
-dependencies = [
- "bindgen 0.69.5",
- "cc",
-]
 
 [[package]]
 name = "twox-hash"
@@ -5541,18 +5460,6 @@ dependencies = [
  "log",
  "serde",
  "web-sys",
-]
-
-[[package]]
-name = "which"
-version = "4.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87ba24419a2078cd2b0f2ede2691b6c66d8e47836da3b6db8265ebad47afbfc7"
-dependencies = [
- "either",
- "home",
- "once_cell",
- "rustix 0.38.44",
 ]
 
 [[package]]
@@ -6220,12 +6127,6 @@ name = "xcursor"
 version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ef33da6b1660b4ddbfb3aef0ade110c8b8a781a3b6382fa5f2b5b040fd55f61"
-
-[[package]]
-name = "xi-unicode"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a67300977d3dc3f8034dae89778f502b6ba20b269527b3223ba59c0cf393bb8a"
 
 [[package]]
 name = "xkbcommon-dl"
