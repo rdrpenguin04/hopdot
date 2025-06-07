@@ -22,7 +22,7 @@ opt-level = 3
 codegen-units = 1
 lto = "thin"
 
-[profile.wasm-release]
+[profile.web-release]
 inherits = "release"
 opt-level = "s"
 strip = "debuginfo"
@@ -33,3 +33,12 @@ bevy_rand = { version = "*", features = ["wasm_js"] }
 [lints.clippy]
 too_many_arguments = "allow"
 type_complexity = "allow"
+
+[profile.ci]
+inherits = "dev"
+opt-level = 0
+debug = "line-tables-only"
+codegen-units = 4
+
+[profile.ci.package."*"]
+opt-level = 0
