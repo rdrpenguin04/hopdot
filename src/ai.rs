@@ -61,7 +61,7 @@ impl SimpleGrid {
         self.grid.len() / self.width
     }
 
-    pub fn iter(&self) -> core::slice::ChunksExact<SimpleCell> {
+    pub fn iter(&self) -> core::slice::ChunksExact<'_, SimpleCell> {
         self.grid.chunks_exact(self.width)
     }
 

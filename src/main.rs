@@ -183,7 +183,7 @@ impl CellGrid {
         self.grid.len() / self.width
     }
 
-    pub fn iter(&self) -> core::slice::ChunksExact<Entity> {
+    pub fn iter(&self) -> core::slice::ChunksExact<'_, Entity> {
         self.grid.chunks_exact(self.width)
     }
 }
