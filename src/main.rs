@@ -215,10 +215,14 @@ impl<'a> IntoIterator for &'a CellGrid {
 fn main() {
     let mut app = App::new();
     app.add_plugins(DefaultPlugins)
-        .add_plugins(TemporalAntiAliasPlugin)
         .add_plugins(MeshPickingPlugin)
         .add_plugins(EntropyPlugin::<WyRand>::default())
         .add_plugins(anim::plugin);
+
+    #[cfg(not(target_family = "wasm"))]
+    {
+        app.add_plugins(TemporalAntiAliasPlugin);
+    }
 
     #[cfg(debug_assertions)]
     {
@@ -773,8 +777,8 @@ fn setup_scene(
                 },
                 Transform::from_xyz(0.0, 12.0, 16.0).looking_to(Dir3::NEG_Z, Dir3::Y),
                 Msaa::Off,
-                TemporalAntiAliasing::default(),
-                ShadowFilteringMethod::Temporal,
+                #[cfg(not(target_family = "wasm"))] TemporalAntiAliasing::default(),
+                #[cfg(not(target_family = "wasm"))] ShadowFilteringMethod::Temporal,
                 TargetTransform(
                     Transform::from_xyz(0.0, 12.0, 20.0).looking_to(Dir3::NEG_Z, Dir3::Y),
                 ),
