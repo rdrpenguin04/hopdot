@@ -6,6 +6,7 @@ use std::{
     time::Duration,
 };
 
+use bevy::audio::Volume;
 #[allow(unused_imports)] // WASM
 use bevy::{
     core_pipeline::{
@@ -24,6 +25,7 @@ use crate::anim::{Bouncing, SmoothingSettings, TargetTransform};
 #[derive(Resource, Reflect)]
 pub struct GameAssets {
     table_scene: Handle<Scene>,
+    bump_sfx: Handle<AudioSource>,
     dot_mesh: Handle<Mesh>,
     tile_mesh: Handle<Mesh>,
     splash_mesh: Handle<Mesh>,
@@ -37,6 +39,8 @@ impl FromWorld for GameAssets {
 
         let table_scene =
             asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/table.glb"));
+
+        let bump_sfx = asset_server.load("sound/bump.flac");
 
         let splash_image = asset_server.load("tex/splash.png");
 
@@ -58,6 +62,7 @@ impl FromWorld for GameAssets {
 
         Self {
             table_scene,
+            bump_sfx,
             dot_mesh,
             tile_mesh,
             splash_mesh,
@@ -338,6 +343,9 @@ pub const GRAY: Color = Color::Srgba(bevy::color::palettes::tailwind::GRAY_400);
 
 #[derive(Component)]
 pub struct Splash;
+
+#[derive(Component)]
+pub struct BumpPlayer;
 
 fn switch_menus(
     cur_menu: Option<Res<State<MenuState>>>,
@@ -657,6 +665,8 @@ fn setup_scene(
     game_assets: Res<GameAssets>,
     asset_server: Res<AssetServer>,
 ) {
+    commands.spawn((AudioPlayer(game_assets.bump_sfx.clone_weak()), BumpPlayer, PlaybackSettings { volume: Volume::Decibels(-6.0), ..default() }));
+
     commands.spawn((
         Mesh3d(game_assets.splash_mesh.clone_weak()),
         MeshMaterial3d(game_assets.splash_material.clone_weak()),
@@ -837,6 +847,7 @@ pub fn scatter_tick(
     mut end_game: ResMut<NextState<EndGame>>,
     need_new_board: Res<State<NeedNewBoard>>,
     mut next_need_new_board: ResMut<NextState<NeedNewBoard>>,
+    bump_player: Query<Entity, With<BumpPlayer>>,
 ) {
     let mut scatter_temp = vec![vec![false; grid.width()]; grid.height()];
     let mut do_scatter = false;
@@ -857,6 +868,7 @@ pub fn scatter_tick(
         next_need_new_board.set(NeedNewBoard(true));
     }
     if do_scatter {
+        commands.entity(bump_player.single().unwrap()).remove::<AudioSink>(); // Cheap restart
         for (y, row) in scatter_temp.iter().enumerate() {
             for (x, &should_scatter) in row.iter().enumerate() {
                 if should_scatter {
