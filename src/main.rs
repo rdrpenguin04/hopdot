@@ -778,8 +778,10 @@ fn setup_scene(
                 },
                 Transform::from_xyz(0.0, 12.0, 16.0).looking_to(Dir3::NEG_Z, Dir3::Y),
                 Msaa::Off,
-                #[cfg(not(target_family = "wasm"))] TemporalAntiAliasing::default(),
-                #[cfg(not(target_family = "wasm"))] ShadowFilteringMethod::Temporal,
+                #[cfg(not(target_family = "wasm"))]
+                TemporalAntiAliasing::default(),
+                #[cfg(not(target_family = "wasm"))]
+                ShadowFilteringMethod::Temporal,
                 TargetTransform(
                     Transform::from_xyz(0.0, 12.0, 20.0).looking_to(Dir3::NEG_Z, Dir3::Y),
                 ),
