@@ -17,15 +17,18 @@ use bevy::{
     platform::collections::HashSet,
     prelude::*,
 };
+use bevy_defer::{AsyncAccess, AsyncCommandsExtension, AsyncPlugin, AsyncWorld, fetch};
 use bevy_prng::WyRand;
 use bevy_rand::plugin::EntropyPlugin;
 
-use crate::anim::{Bouncing, SmoothingSettings, TargetTransform};
+use crate::anim::{Bouncing, SmoothingSettings, TargetTransform, TargetUiOpacity};
 
 #[derive(Resource, Reflect)]
 pub struct GameAssets {
     table_scene: Handle<Scene>,
     bump_sfx: Handle<AudioSource>,
+    bold_font: Handle<Font>,
+    mono_font: Handle<Font>,
     dot_mesh: Handle<Mesh>,
     tile_mesh: Handle<Mesh>,
     splash_mesh: Handle<Mesh>,
@@ -41,6 +44,9 @@ impl FromWorld for GameAssets {
             asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/table.glb"));
 
         let bump_sfx = asset_server.load("sound/bump.flac");
+
+        let bold_font = asset_server.load("fonts/FiraSans-Bold.ttf");
+        let mono_font = asset_server.load("fonts/FiraMono-Medium.ttf");
 
         let splash_image = asset_server.load("tex/splash.png");
 
@@ -63,6 +69,8 @@ impl FromWorld for GameAssets {
         Self {
             table_scene,
             bump_sfx,
+            bold_font,
+            mono_font,
             dot_mesh,
             tile_mesh,
             splash_mesh,
@@ -99,6 +107,7 @@ pub enum MainState {
     Splash,
     Menu,
     Game,
+    DimForUi,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect, States)]
@@ -221,6 +230,7 @@ impl<'a> IntoIterator for &'a CellGrid {
 fn main() {
     let mut app = App::new();
     app.add_plugins(DefaultPlugins)
+        .add_plugins(AsyncPlugin::default_settings())
         .add_plugins(MeshPickingPlugin)
         .add_plugins(EntropyPlugin::<WyRand>::default())
         .add_plugins(anim::plugin);
@@ -287,6 +297,22 @@ fn main() {
         .add_systems(Startup, setup_scene)
         .add_systems(OnEnter(MainState::Game), fly_in_game)
         .add_systems(OnExit(MainState::Game), fly_out_game)
+        .add_systems(
+            OnEnter(MainState::DimForUi),
+            |lights: Query<&mut PointLight>| {
+                for mut light in lights {
+                    light.intensity = 0.0;
+                }
+            },
+        )
+        .add_systems(
+            OnExit(MainState::DimForUi),
+            |lights: Query<&mut PointLight>| {
+                for mut light in lights {
+                    light.intensity = 1_000_000.0;
+                }
+            },
+        )
         .add_systems(
             Update,
             switch_menus.run_if(state_changed::<MenuState>.or(state_changed::<MainState>)),
@@ -660,6 +686,15 @@ fn add_hover_observers(entity_commands: &mut EntityCommands) {
         );
 }
 
+#[derive(Component)]
+pub struct GameEndUiTree;
+
+#[derive(Component)]
+pub struct GameEndText;
+
+#[derive(Component)]
+pub struct CreditsUiTree;
+
 fn setup_scene(
     mut commands: Commands,
     game_assets: Res<GameAssets>,
@@ -673,6 +708,150 @@ fn setup_scene(
             ..default()
         },
     ));
+
+    commands
+        .spawn((
+            GameEndUiTree,
+            Node {
+                display: Display::Flex,
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Center,
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                ..default()
+            },
+            Visibility::Hidden,
+        ))
+        .with_children(|commands| {
+            commands.spawn((
+                Node {
+                    margin: UiRect::top(Val::Percent(10.0)),
+                    ..default()
+                },
+                Text::new("Player 1 wins!"),
+                TextFont {
+                    font: game_assets.bold_font.clone_weak(),
+                    font_size: 60.0,
+                    ..default()
+                },
+                GameEndText,
+            ));
+            commands
+                .spawn((
+                    Node {
+                        margin: UiRect::top(Val::Px(10.0)),
+                        ..default()
+                    },
+                    Button,
+                    Text::new("Back to main menu"),
+                    TextFont {
+                        font: game_assets.mono_font.clone_weak(),
+                        font_size: 20.0,
+                        ..default()
+                    },
+                    Outline::new(Val::Px(5.0), Val::Px(5.0), Color::WHITE),
+                    BorderRadius::all(Val::Px(5.0)),
+                ))
+                .observe(
+                    |_: Trigger<Pointer<Click>>,
+                     mut commands: Commands,
+                     mut next_state: ResMut<NextState<MainState>>,
+                     mut ui_opacity: ResMut<TargetUiOpacity>,
+                     ui_tree: Query<Entity, With<GameEndUiTree>>| {
+                        next_state.set(MainState::Menu);
+                        ui_opacity.0 = 0.0;
+                        let ui_tree = ui_tree.single().unwrap();
+                        commands.spawn_task(move || async move {
+                            AsyncWorld.sleep(1.0).await;
+                            fetch!(ui_tree, Visibility).get_mut(|x| *x = Visibility::Hidden)?;
+                            Ok(())
+                        });
+                    },
+                );
+        });
+
+    commands
+        .spawn((
+            CreditsUiTree,
+            Node {
+                display: Display::Flex,
+                flex_direction: FlexDirection::Column,
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                ..default()
+            },
+            Visibility::Hidden,
+        ))
+        .with_children(|commands| {
+            commands.spawn((
+                Text::new("Credits"),
+                TextFont {
+                    font: game_assets.bold_font.clone_weak(),
+                    font_size: 60.0,
+                    ..default()
+                },
+            ));
+            commands
+                .spawn((
+                    Node {
+                        margin: UiRect::top(Val::Px(10.0)),
+                        ..default()
+                    },
+                    Text::new("Coding and most assets by Ray Redondo\nOriginal concept from KJumpingCube\n\nThis game is open source! Check it out at https://github.com/rdrpenguin04/hopdot"),
+                    TextFont {
+                        font: game_assets.mono_font.clone_weak(),
+                        font_size: 20.0,
+                        ..default()
+                    },
+                ));
+            commands
+                .spawn((
+                    Node {
+                        margin: UiRect::top(Val::Px(20.0)),
+                        ..default()
+                    },
+                    Button,
+                    Text::new("Back to main menu"),
+                    TextFont {
+                        font: game_assets.mono_font.clone_weak(),
+                        font_size: 20.0,
+                        ..default()
+                    },
+                    Outline::new(Val::Px(5.0), Val::Px(5.0), Color::WHITE),
+                    BorderRadius::all(Val::Px(5.0)),
+                ))
+                .observe(
+                    |_: Trigger<Pointer<Click>>,
+                     mut commands: Commands,
+                     mut next_state: ResMut<NextState<MainState>>,
+                     mut ui_opacity: ResMut<TargetUiOpacity>,
+                     ui_tree: Query<Entity, With<CreditsUiTree>>| {
+                        next_state.set(MainState::Menu);
+                        ui_opacity.0 = 0.0;
+                        let ui_tree = ui_tree.single().unwrap();
+                        commands.spawn_task(move || async move {
+                            AsyncWorld.sleep(1.0).await;
+                            fetch!(ui_tree, Visibility).get_mut(|x| *x = Visibility::Hidden)?;
+                            Ok(())
+                        });
+                    },
+                );
+            commands
+                .spawn((
+                    Node {
+                        margin: UiRect::top(Val::Px(60.0)),
+                        ..default()
+                    },
+                    Text::new("© 2025 Lightning Creations. The Lightning Creations logo is a trademark of Lightning Creations and is used by permission of the LC Admins. For more information, visit https://lcdev.xyz"),
+                    TextFont {
+                        font: game_assets.mono_font.clone_weak(),
+                        font_size: 10.0,
+                        ..default()
+                    },
+                ));
+        });
 
     commands.spawn((
         Mesh3d(game_assets.splash_mesh.clone_weak()),
@@ -722,8 +901,12 @@ fn setup_scene(
                 },
             ))
             .observe(
-                |_: Trigger<Pointer<Click>>, mut next_state: ResMut<NextState<MainState>>| {
-                    next_state.set(MainState::Game);
+                |_: Trigger<Pointer<Click>>,
+                 mut next_state: ResMut<NextState<MainState>>,
+                 mut credits_ui_tree: Query<&mut Visibility, With<CreditsUiTree>>, mut ui_opacity: ResMut<TargetUiOpacity>| {
+                    next_state.set(MainState::DimForUi);
+                    *credits_ui_tree.single_mut().unwrap() = Visibility::Visible;
+                    ui_opacity.0 = 1.0;
                 },
             ),
     );
@@ -939,6 +1122,10 @@ pub fn orbit(mut orbiter: Query<&mut TargetTransform, With<Orbiter>>, time: Res<
 pub fn game_ended(
     mut camera_pos: Query<&mut TargetTransform, With<Camera3d>>,
     config: Res<Config>,
+    mut ui_opacity: ResMut<TargetUiOpacity>,
+    mut game_end_ui: Query<&mut Visibility, With<GameEndUiTree>>,
+    mut game_end_text: Query<&mut Text, With<GameEndText>>,
+    current_turn: Res<State<CurrentTurn>>,
 ) {
     if let Ok(mut camera_pos) = camera_pos.single_mut() {
         let (width, height) = config.grid_size;
@@ -947,5 +1134,8 @@ pub fn game_ended(
             Transform::from_xyz(0.0, max_dim as f32, 2.0 * max_dim as f32)
                 .looking_at(Vec3::ZERO, Vec3::Y),
         );
+        ui_opacity.0 = 1.0;
+        *game_end_ui.single_mut().unwrap() = Visibility::Visible;
+        game_end_text.single_mut().unwrap().0 = format!("Player {} wins!", current_turn.0);
     }
 }

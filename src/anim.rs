@@ -15,6 +15,9 @@ pub struct SmoothingSettings {
 #[derive(Component, Reflect)]
 pub struct Bouncing(pub f64);
 
+#[derive(Resource, Reflect)]
+pub struct TargetUiOpacity(pub f32);
+
 pub fn plugin(app: &mut App) {
     app.add_systems(
         Update,
@@ -23,8 +26,10 @@ pub fn plugin(app: &mut App) {
             animate_cell_colors,
             smooth_transform,
             run_bouncing,
+            run_ui_opacity,
         ),
-    );
+    )
+    .insert_resource(TargetUiOpacity(0.0));
 }
 
 fn smooth_transform(
@@ -102,7 +107,7 @@ fn arrange_dots(
     }
 }
 
-pub fn animate_cell_colors(
+fn animate_cell_colors(
     cells: Query<(&MeshMaterial3d<StandardMaterial>, &CellColor)>,
     player_config: Res<Config>,
     time: Res<Time>,
@@ -132,7 +137,7 @@ pub fn animate_cell_colors(
     }
 }
 
-pub fn run_bouncing(
+fn run_bouncing(
     mut commands: Commands,
     mut bouncing_objects: Query<(Entity, &Bouncing, &mut TargetTransform, &mut Transform)>,
     time: Res<Time>,
@@ -151,5 +156,23 @@ pub fn run_bouncing(
             target.0.translation.y = 0.0;
             commands.entity(entity).remove::<Bouncing>();
         }
+    }
+}
+
+fn run_ui_opacity(
+    text_colors: Query<&mut TextColor>,
+    outlines: Query<&mut Outline>,
+    target_ui_opacity: Res<TargetUiOpacity>,
+    time: Res<Time>,
+) {
+    for mut text_color in text_colors {
+        let mut alpha = text_color.alpha();
+        alpha.smooth_nudge(&target_ui_opacity.0, 5.0, time.delta_secs());
+        text_color.set_alpha(alpha);
+    }
+    for mut outline in outlines {
+        let mut alpha = outline.color.alpha();
+        alpha.smooth_nudge(&target_ui_opacity.0, 5.0, time.delta_secs());
+        outline.color.set_alpha(alpha);
     }
 }
