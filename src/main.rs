@@ -802,7 +802,7 @@ fn setup_scene(
                     Text::new("Coding and most assets by Ray Redondo\nOriginal concept from KJumpingCube\n\nThis game is open source! Check it out at https://github.com/rdrpenguin04/hopdot"),
                     TextFont {
                         font: game_assets.mono_font.clone_weak(),
-                        font_size: 20.0,
+                        font_size: 15.0,
                         ..default()
                     },
                 ));
@@ -816,7 +816,7 @@ fn setup_scene(
                     Text::new("Back to main menu"),
                     TextFont {
                         font: game_assets.mono_font.clone_weak(),
-                        font_size: 20.0,
+                        font_size: 15.0,
                         ..default()
                     },
                     Outline::new(Val::Px(5.0), Val::Px(5.0), Color::WHITE),
@@ -847,7 +847,7 @@ fn setup_scene(
                     Text::new("© 2025 Lightning Creations. The Lightning Creations logo is a trademark of Lightning Creations and is used by permission of the LC Admins. For more information, visit https://lcdev.xyz"),
                     TextFont {
                         font: game_assets.mono_font.clone_weak(),
-                        font_size: 10.0,
+                        font_size: 7.0,
                         ..default()
                     },
                 ));
