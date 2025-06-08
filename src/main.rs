@@ -903,7 +903,8 @@ fn setup_scene(
             .observe(
                 |_: Trigger<Pointer<Click>>,
                  mut next_state: ResMut<NextState<MainState>>,
-                 mut credits_ui_tree: Query<&mut Visibility, With<CreditsUiTree>>, mut ui_opacity: ResMut<TargetUiOpacity>| {
+                 mut credits_ui_tree: Query<&mut Visibility, With<CreditsUiTree>>,
+                 mut ui_opacity: ResMut<TargetUiOpacity>| {
                     next_state.set(MainState::DimForUi);
                     *credits_ui_tree.single_mut().unwrap() = Visibility::Visible;
                     ui_opacity.0 = 1.0;
