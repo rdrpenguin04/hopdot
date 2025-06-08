@@ -6,6 +6,7 @@ use std::{
     time::Duration,
 };
 
+#[allow(unused_imports)] // WASM
 use bevy::{
     core_pipeline::{
         bloom::Bloom,
