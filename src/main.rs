@@ -252,32 +252,32 @@ fn main() {
         .insert_resource(ClearColor(Color::srgb_u8(33, 34, 37)))
         .insert_resource(Config {
             players: vec![
-                // PlayerConfigEntry::Human {
-                //     color: Color::srgb(0.0, 1.0, 0.0),
-                //     name: "Player 1".into(),
-                // },
+                PlayerConfigEntry::Human {
+                    color: Color::srgb(0.0, 1.0, 0.0),
+                    name: "Player 1".into(),
+                },
                 // PlayerConfigEntry::Human {
                 //     color: Color::srgb(0.0, 0.0, 1.0),
                 //     name: "Player 2".into(),
                 // },
-                PlayerConfigEntry::Bot {
-                    color: Color::srgb(1.0, 0.0, 0.0),
-                    level: 2,
-                },
-                PlayerConfigEntry::Bot {
-                    color: Color::srgb(0.0, 1.0, 1.0),
-                    level: 2,
-                },
-                PlayerConfigEntry::Bot {
-                    color: Color::srgb(0.0, 1.0, 0.0),
-                    level: 2,
-                },
+                // PlayerConfigEntry::Bot {
+                //     color: Color::srgb(1.0, 0.0, 0.0),
+                //     level: 2,
+                // },
+                // PlayerConfigEntry::Bot {
+                //     color: Color::srgb(0.0, 1.0, 1.0),
+                //     level: 2,
+                // },
+                // PlayerConfigEntry::Bot {
+                //     color: Color::srgb(0.0, 1.0, 0.0),
+                //     level: 2,
+                // },
                 PlayerConfigEntry::Bot {
                     color: Color::srgb(0.0, 0.0, 1.0),
                     level: 2,
                 },
             ],
-            grid_size: (12, 12),
+            grid_size: (6, 6),
         })
         .add_systems(Startup, setup_scene)
         .add_systems(OnEnter(MainState::Game), fly_in_game)
