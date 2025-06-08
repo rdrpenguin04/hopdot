@@ -665,7 +665,14 @@ fn setup_scene(
     game_assets: Res<GameAssets>,
     asset_server: Res<AssetServer>,
 ) {
-    commands.spawn((AudioPlayer(game_assets.bump_sfx.clone_weak()), BumpPlayer, PlaybackSettings { volume: Volume::Decibels(-6.0), ..default() }));
+    commands.spawn((
+        AudioPlayer(game_assets.bump_sfx.clone_weak()),
+        BumpPlayer,
+        PlaybackSettings {
+            volume: Volume::Decibels(-6.0),
+            ..default()
+        },
+    ));
 
     commands.spawn((
         Mesh3d(game_assets.splash_mesh.clone_weak()),
@@ -868,7 +875,9 @@ pub fn scatter_tick(
         next_need_new_board.set(NeedNewBoard(true));
     }
     if do_scatter {
-        commands.entity(bump_player.single().unwrap()).remove::<AudioSink>(); // Cheap restart
+        commands
+            .entity(bump_player.single().unwrap())
+            .remove::<AudioSink>(); // Cheap restart
         for (y, row) in scatter_temp.iter().enumerate() {
             for (x, &should_scatter) in row.iter().enumerate() {
                 if should_scatter {
