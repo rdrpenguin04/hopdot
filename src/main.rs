@@ -21,7 +21,7 @@ use bevy_defer::{AsyncAccess, AsyncCommandsExtension, AsyncPlugin, AsyncWorld, f
 use bevy_prng::WyRand;
 use bevy_rand::plugin::EntropyPlugin;
 
-use crate::anim::{Bouncing, SmoothingSettings, TargetTransform, TargetUiOpacity};
+use crate::anim::{AnimateBackgroundColor, Bouncing, SmoothingSettings, TargetTransform, TargetUiOpacity};
 
 #[derive(Resource, Reflect)]
 pub struct GameAssets {
@@ -40,8 +40,7 @@ impl FromWorld for GameAssets {
     fn from_world(world: &mut World) -> Self {
         let asset_server = world.resource::<AssetServer>();
 
-        let table_scene =
-            asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/table.glb"));
+        let table_scene = asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/table.glb"));
 
         let bump_sfx = asset_server.load("sound/bump.flac");
 
@@ -227,6 +226,12 @@ impl<'a> IntoIterator for &'a CellGrid {
     }
 }
 
+#[derive(Resource)]
+pub struct FlashIntensity(f32);
+
+#[derive(Resource)]
+struct RulesPageNumber(usize);
+
 fn main() {
     let mut app = App::new();
     app.add_plugins(DefaultPlugins)
@@ -265,6 +270,8 @@ fn main() {
             ..default()
         })
         .insert_resource(ClearColor(Color::srgb_u8(33, 34, 37)))
+        .insert_resource(FlashIntensity(0.3))
+        .insert_resource(RulesPageNumber(1))
         .insert_resource(Config {
             players: vec![
                 PlayerConfigEntry::Human {
@@ -297,26 +304,17 @@ fn main() {
         .add_systems(Startup, setup_scene)
         .add_systems(OnEnter(MainState::Game), fly_in_game)
         .add_systems(OnExit(MainState::Game), fly_out_game)
-        .add_systems(
-            OnEnter(MainState::DimForUi),
-            |lights: Query<&mut PointLight>| {
-                for mut light in lights {
-                    light.intensity = 0.0;
-                }
-            },
-        )
-        .add_systems(
-            OnExit(MainState::DimForUi),
-            |lights: Query<&mut PointLight>| {
-                for mut light in lights {
-                    light.intensity = 1_000_000.0;
-                }
-            },
-        )
-        .add_systems(
-            Update,
-            switch_menus.run_if(state_changed::<MenuState>.or(state_changed::<MainState>)),
-        )
+        .add_systems(OnEnter(MainState::DimForUi), |lights: Query<&mut PointLight>| {
+            for mut light in lights {
+                light.intensity = 0.0;
+            }
+        })
+        .add_systems(OnExit(MainState::DimForUi), |lights: Query<&mut PointLight>| {
+            for mut light in lights {
+                light.intensity = 1_000_000.0;
+            }
+        })
+        .add_systems(Update, switch_menus.run_if(state_changed::<MenuState>.or(state_changed::<MainState>)))
         .add_systems(
             OnEnter(MainState::Menu),
             (fly_to_menu, |mut end_game: ResMut<NextState<EndGame>>| {
@@ -326,8 +324,7 @@ fn main() {
         )
         .add_systems(
             Update,
-            (|key_input: Res<ButtonInput<KeyCode>>,
-              mut main_state: ResMut<NextState<MainState>>| {
+            (|key_input: Res<ButtonInput<KeyCode>>, mut main_state: ResMut<NextState<MainState>>| {
                 if key_input.just_pressed(KeyCode::Escape) {
                     main_state.set(MainState::Game);
                 }
@@ -376,12 +373,7 @@ pub struct BumpPlayer;
 fn switch_menus(
     cur_menu: Option<Res<State<MenuState>>>,
     mut prev_menu: Local<Option<MenuState>>,
-    menu_elements: Query<(
-        &MenuElement,
-        &mut TargetTransform,
-        &mut Transform,
-        &mut Visibility,
-    )>,
+    menu_elements: Query<(&MenuElement, &mut TargetTransform, &mut Transform, &mut Visibility)>,
 ) {
     for (el, mut target, mut transform, mut visibility) in menu_elements {
         if *prev_menu == Some(el.for_menu) {
@@ -487,10 +479,7 @@ fn fly_in_game(
     mut commands: Commands,
     mut camera_pos: Query<&mut TargetTransform, With<Camera3d>>,
     config: Res<Config>,
-    mut grid_tray: Query<
-        (Entity, &mut Transform, &mut TargetTransform),
-        (With<GridTray>, Without<Camera3d>),
-    >,
+    mut grid_tray: Query<(Entity, &mut Transform, &mut TargetTransform), (With<GridTray>, Without<Camera3d>)>,
     need_new_board: Res<State<NeedNewBoard>>,
     mut next_need_new_board: ResMut<NextState<NeedNewBoard>>,
     mut grid: ResMut<CellGrid>,
@@ -504,8 +493,7 @@ fn fly_in_game(
     let max_dim = (width * 2 / 3).max(height);
     let true_max_dim = width.max(height);
     if let Ok(mut camera_pos) = camera_pos.single_mut() {
-        **camera_pos = Transform::from_xyz(0.0, max_dim as f32 * 2.0, max_dim as f32)
-            .looking_at(Vec3::ZERO, Vec3::Y);
+        **camera_pos = Transform::from_xyz(0.0, max_dim as f32 * 2.0, max_dim as f32).looking_at(Vec3::ZERO, Vec3::Y);
     }
     for (table, name) in named_entities {
         if name.as_str() == "Table" {
@@ -527,32 +515,29 @@ fn fly_in_game(
     if need_new_board.0 {
         let (width, height) = config.grid_size;
         grid.new_inplace(width, height);
-        commands
-            .entity(grid_tray)
-            .despawn_related::<Children>()
-            .with_children(|commands| {
-                for y in 0..height {
-                    for x in 0..width {
-                        let x_border = x == 0 || x == grid.width() - 1;
-                        let y_border = y == 0 || y == grid.height() - 1;
-                        let capacity = if x_border && y_border {
-                            2
-                        } else if x_border || y_border {
-                            3
-                        } else {
-                            4
-                        };
-                        grid[y][x] = spawn_cell(
-                            commands,
-                            &mut materials,
-                            &game_assets,
-                            x as f32 - width as f32 / 2.0 + 0.5,
-                            y as f32 - height as f32 / 2.0 + 0.5,
-                            capacity,
-                        );
-                    }
+        commands.entity(grid_tray).despawn_related::<Children>().with_children(|commands| {
+            for y in 0..height {
+                for x in 0..width {
+                    let x_border = x == 0 || x == grid.width() - 1;
+                    let y_border = y == 0 || y == grid.height() - 1;
+                    let capacity = if x_border && y_border {
+                        2
+                    } else if x_border || y_border {
+                        3
+                    } else {
+                        4
+                    };
+                    grid[y][x] = spawn_cell(
+                        commands,
+                        &mut materials,
+                        &game_assets,
+                        x as f32 - width as f32 / 2.0 + 0.5,
+                        y as f32 - height as f32 / 2.0 + 0.5,
+                        capacity,
+                    );
                 }
-            });
+            }
+        });
         game_operation.set(GameOperation::Animating);
         transform.translation = vec3(0.0, 30.0, 0.0);
         next_need_new_board.set(NeedNewBoard(false));
@@ -631,18 +616,14 @@ fn spawn_cell(
             ]),
             DotCellMeta { capacity },
         ))
-        .observe(
-            |trigger: Trigger<Pointer<Over>>, mut targets: Query<&mut TargetTransform>| {
-                let mut target = targets.get_mut(trigger.target).unwrap();
-                target.scale = Vec3::splat(1.05);
-            },
-        )
-        .observe(
-            |trigger: Trigger<Pointer<Out>>, mut targets: Query<&mut TargetTransform>| {
-                let mut target = targets.get_mut(trigger.target).unwrap();
-                target.scale = Vec3::splat(1.0);
-            },
-        )
+        .observe(|trigger: Trigger<Pointer<Over>>, mut targets: Query<&mut TargetTransform>| {
+            let mut target = targets.get_mut(trigger.target).unwrap();
+            target.scale = Vec3::splat(1.05);
+        })
+        .observe(|trigger: Trigger<Pointer<Out>>, mut targets: Query<&mut TargetTransform>| {
+            let mut target = targets.get_mut(trigger.target).unwrap();
+            target.scale = Vec3::splat(1.0);
+        })
         .observe(
             move |trigger: Trigger<Pointer<Click>>,
                   mut commands: Commands,
@@ -652,17 +633,15 @@ fn spawn_cell(
                   next_state: Option<ResMut<NextState<GameOperation>>>,
                   current_turn: Option<Res<State<CurrentTurn>>>,
                   grid_tray: Query<Entity, With<GridTray>>| {
-                if let (Some(state), Some(mut next_state), Some(current_turn)) =
-                    (state, next_state, current_turn)
+                if let (Some(state), Some(mut next_state), Some(current_turn)) = (state, next_state, current_turn)
                     && *state == GameOperation::Human
                 {
                     let mut color = colors.get_mut(trigger.target).unwrap();
                     if color.player == 0 || color.player == current_turn.0 {
                         color.player = current_turn.0;
-                        commands.entity(trigger.target).with_related::<Dot>((
-                            spawn_dot(x, z, &game_assets),
-                            ChildOf(grid_tray.single().unwrap()),
-                        ));
+                        commands
+                            .entity(trigger.target)
+                            .with_related::<Dot>((spawn_dot(x, z, &game_assets), ChildOf(grid_tray.single().unwrap())));
                         next_state.set(GameOperation::Animating);
                     }
                 }
@@ -674,16 +653,12 @@ fn spawn_cell(
 fn add_hover_observers(entity_commands: &mut EntityCommands) {
     let id = entity_commands.id();
     entity_commands
-        .observe(
-            move |_: Trigger<Pointer<Over>>, mut targets: Query<&mut TargetTransform>| {
-                targets.get_mut(id).unwrap().scale = Vec3::splat(1.05);
-            },
-        )
-        .observe(
-            move |_: Trigger<Pointer<Out>>, mut targets: Query<&mut TargetTransform>| {
-                targets.get_mut(id).unwrap().scale = Vec3::splat(1.0);
-            },
-        );
+        .observe(move |_: Trigger<Pointer<Over>>, mut targets: Query<&mut TargetTransform>| {
+            targets.get_mut(id).unwrap().scale = Vec3::splat(1.05);
+        })
+        .observe(move |_: Trigger<Pointer<Out>>, mut targets: Query<&mut TargetTransform>| {
+            targets.get_mut(id).unwrap().scale = Vec3::splat(1.0);
+        });
 }
 
 #[derive(Component)]
@@ -695,11 +670,13 @@ pub struct GameEndText;
 #[derive(Component)]
 pub struct CreditsUiTree;
 
-fn setup_scene(
-    mut commands: Commands,
-    game_assets: Res<GameAssets>,
-    asset_server: Res<AssetServer>,
-) {
+#[derive(Component)]
+pub struct SettingsUiTree;
+
+#[derive(Component)]
+pub struct RulesUiTree;
+
+fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_server: Res<AssetServer>) {
     commands.spawn((
         AudioPlayer(game_assets.bump_sfx.clone_weak()),
         BumpPlayer,
@@ -758,6 +735,500 @@ fn setup_scene(
                      mut next_state: ResMut<NextState<MainState>>,
                      mut ui_opacity: ResMut<TargetUiOpacity>,
                      ui_tree: Query<Entity, With<GameEndUiTree>>| {
+                        next_state.set(MainState::Menu);
+                        ui_opacity.0 = 0.0;
+                        let ui_tree = ui_tree.single().unwrap();
+                        commands.spawn_task(move || async move {
+                            AsyncWorld.sleep(1.0).await;
+                            fetch!(ui_tree, Visibility).get_mut(|x| *x = Visibility::Hidden)?;
+                            Ok(())
+                        });
+                    },
+                );
+        });
+
+    commands
+        .spawn((
+            RulesUiTree,
+            Node {
+                display: Display::Flex,
+                flex_direction: FlexDirection::Column,
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                ..default()
+            },
+            Visibility::Hidden,
+        ))
+        .with_children(|commands| {
+            #[derive(Component)]
+            struct RulesText;
+
+            commands.spawn((
+                Text::new("Rules"),
+                TextFont {
+                    font: game_assets.bold_font.clone_weak(),
+                    font_size: 60.0,
+                    ..default()
+                },
+            ));
+            const RULES_PAGES: [&str; 3] = [
+                "The object of Hopdot is to claim the entire board. You can claim a square in one \
+                of two ways: directly taking an unowned square on your turn, or cascading from a \
+                neighboring square.",
+                "Each square has a maximum carrying capacity equal to the number of neighbors it \
+                has. In other words:\n  * the corner squares can hold two dots,\n  * the edge \
+                squares can hold three dots,\n  * and the center squares can hold four dots.",
+                "A useful strategy tip to know: the corners are the strategically best squares to \
+                take first, as they have few neighbors and can be defended easily. The edges come \
+                next.\n\nThe other important thing to avoid is racing. If you have a square near \
+                an opponent's square, and their square has more dots than yours, don't try to \
+                build yours; you'll just give them a more-built cell to work with."
+            ];
+            ////////////////////////////////////////////////////////////////////////////////////////
+            commands.spawn((
+                Node {
+                    min_width: Val::Px(0.0),
+                    max_width: Val::Percent(50.0),
+                    ..default()
+                },
+                Text::new(RULES_PAGES[0]),
+                TextFont {
+                    font: game_assets.mono_font.clone_weak(),
+                    font_size: 15.0,
+                    ..default()
+                },
+                RulesText,
+            ));
+            commands
+                .spawn(Node {
+                    margin: UiRect::top(Val::Px(20.0)),
+                    display: Display::Flex,
+                    flex_direction: FlexDirection::Row,
+                    ..default()
+                })
+                .with_children(|commands| {
+                    #[derive(Component)]
+                    struct RulesPageNumberText;
+
+                    commands.spawn((
+                        Text::new("Page: "),
+                        TextFont {
+                            font: game_assets.mono_font.clone_weak(),
+                            font_size: 15.0,
+                            ..default()
+                        },
+                    ));
+                    commands
+                        .spawn((
+                            Node {
+                                margin: UiRect::horizontal(Val::Px(10.0)),
+                                ..default()
+                            },
+                            Button,
+                            BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+                            Text::new("<"),
+                            TextFont {
+                                font: game_assets.mono_font.clone_weak(),
+                                font_size: 15.0,
+                                ..default()
+                            },
+                            Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
+                            BorderRadius::all(Val::Px(5.0)),
+                            AnimateBackgroundColor,
+                        ))
+                        .observe(
+                            |_: Trigger<Pointer<Click>>,
+                             mut rules_page_number: ResMut<RulesPageNumber>,
+                             mut page_num_text: Query<&mut Text, With<RulesPageNumberText>>,
+                             mut rules_text: Query<&mut Text, (With<RulesText>, Without<RulesPageNumberText>)>| {
+                                rules_page_number.0 -= 1;
+                                if rules_page_number.0 < 1 {
+                                    rules_page_number.0 = 1;
+                                }
+                                page_num_text.single_mut().unwrap().0 = format!("{}", rules_page_number.0);
+                                rules_text.single_mut().unwrap().0 = RULES_PAGES[rules_page_number.0 - 1].into();
+                            },
+                        );
+                    commands.spawn((
+                        Text::new("1"),
+                        TextFont {
+                            font: game_assets.mono_font.clone_weak(),
+                            font_size: 15.0,
+                            ..default()
+                        },
+                        RulesPageNumberText,
+                    ));
+                    commands
+                        .spawn((
+                            Node {
+                                margin: UiRect::horizontal(Val::Px(10.0)),
+                                ..default()
+                            },
+                            Button,
+                            BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+                            Text::new(">"),
+                            TextFont {
+                                font: game_assets.mono_font.clone_weak(),
+                                font_size: 15.0,
+                                ..default()
+                            },
+                            Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
+                            BorderRadius::all(Val::Px(5.0)),
+                            AnimateBackgroundColor,
+                        ))
+                        .observe(
+                            |_: Trigger<Pointer<Click>>,
+                             mut rules_page_number: ResMut<RulesPageNumber>,
+                             mut page_num_text: Query<&mut Text, With<RulesPageNumberText>>,
+                             mut rules_text: Query<&mut Text, (With<RulesText>, Without<RulesPageNumberText>)>| {
+                                rules_page_number.0 += 1;
+                                if rules_page_number.0 > RULES_PAGES.len() {
+                                    rules_page_number.0 = RULES_PAGES.len();
+                                }
+                                page_num_text.single_mut().unwrap().0 = format!("{}", rules_page_number.0);
+                                rules_text.single_mut().unwrap().0 = RULES_PAGES[rules_page_number.0 - 1].into();
+                            },
+                        );
+                });
+        });
+
+    commands
+        .spawn((
+            SettingsUiTree,
+            Node {
+                display: Display::Flex,
+                flex_direction: FlexDirection::Column,
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                ..default()
+            },
+            Visibility::Hidden,
+        ))
+        .with_children(|commands| {
+            commands.spawn((
+                Text::new("Settings"),
+                TextFont {
+                    font: game_assets.bold_font.clone_weak(),
+                    font_size: 60.0,
+                    ..default()
+                },
+            ));
+            commands
+                .spawn(Node {
+                    margin: UiRect::top(Val::Px(5.0)),
+                    display: Display::Block,
+                    ..default()
+                })
+                .with_children(|commands| {
+                    commands.spawn((
+                        Text::new("Player Config"),
+                        TextFont {
+                            font: game_assets.bold_font.clone_weak(),
+                            font_size: 40.0,
+                            ..default()
+                        },
+                    ));
+                    // TODO
+                });
+            commands
+                .spawn(Node {
+                    margin: UiRect::top(Val::Px(5.0)),
+                    display: Display::Block,
+                    ..default()
+                })
+                .with_children(|commands| {
+                    commands.spawn((
+                        Text::new("Grid Size"),
+                        TextFont {
+                            font: game_assets.bold_font.clone_weak(),
+                            font_size: 40.0,
+                            ..default()
+                        },
+                    ));
+                    commands
+                        .spawn(Node {
+                            margin: UiRect::top(Val::Px(10.0)),
+                            display: Display::Flex,
+                            flex_direction: FlexDirection::Row,
+                            ..default()
+                        })
+                        .with_children(|commands| {
+                            #[derive(Component)]
+                            struct WidthText;
+                            commands.spawn((
+                                Text::new("width: "),
+                                TextFont {
+                                    font: game_assets.mono_font.clone_weak(),
+                                    font_size: 15.0,
+                                    ..default()
+                                },
+                            ));
+                            commands
+                                .spawn((
+                                    Node {
+                                        margin: UiRect::horizontal(Val::Px(10.0)),
+                                        ..default()
+                                    },
+                                    Button,
+                                    BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+                                    Text::new("<"),
+                                    TextFont {
+                                        font: game_assets.mono_font.clone_weak(),
+                                        font_size: 15.0,
+                                        ..default()
+                                    },
+                                    Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
+                                    BorderRadius::all(Val::Px(5.0)),
+                                    AnimateBackgroundColor,
+                                ))
+                                .observe(
+                                    |_: Trigger<Pointer<Click>>, mut config: ResMut<Config>, mut width_text: Query<&mut Text, With<WidthText>>| {
+                                        config.grid_size.0 -= 1;
+                                        if config.grid_size.0 < 1 {
+                                            config.grid_size.0 = 1;
+                                        }
+                                        width_text.single_mut().unwrap().0 = format!("{:>2}", config.grid_size.0);
+                                    },
+                                );
+                            commands.spawn((
+                                Text::new(" 6"),
+                                TextFont {
+                                    font: game_assets.mono_font.clone_weak(),
+                                    font_size: 15.0,
+                                    ..default()
+                                },
+                                WidthText,
+                            ));
+                            commands
+                                .spawn((
+                                    Node {
+                                        margin: UiRect::horizontal(Val::Px(10.0)),
+                                        ..default()
+                                    },
+                                    Button,
+                                    BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+                                    Text::new(">"),
+                                    TextFont {
+                                        font: game_assets.mono_font.clone_weak(),
+                                        font_size: 15.0,
+                                        ..default()
+                                    },
+                                    Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
+                                    BorderRadius::all(Val::Px(5.0)),
+                                    AnimateBackgroundColor,
+                                ))
+                                .observe(
+                                    |_: Trigger<Pointer<Click>>, mut config: ResMut<Config>, mut width_text: Query<&mut Text, With<WidthText>>| {
+                                        config.grid_size.0 += 1;
+                                        if config.grid_size.0 > 20 {
+                                            config.grid_size.0 = 20;
+                                        }
+                                        width_text.single_mut().unwrap().0 = format!("{:>2}", config.grid_size.0);
+                                    },
+                                );
+                        });
+                    commands
+                        .spawn(Node {
+                            margin: UiRect::top(Val::Px(10.0)),
+                            display: Display::Flex,
+                            flex_direction: FlexDirection::Row,
+                            ..default()
+                        })
+                        .with_children(|commands| {
+                            #[derive(Component)]
+                            struct HeightText;
+                            commands.spawn((
+                                Text::new("height: "),
+                                TextFont {
+                                    font: game_assets.mono_font.clone_weak(),
+                                    font_size: 15.0,
+                                    ..default()
+                                },
+                            ));
+                            commands
+                                .spawn((
+                                    Node {
+                                        margin: UiRect::horizontal(Val::Px(10.0)),
+                                        ..default()
+                                    },
+                                    Button,
+                                    BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+                                    Text::new("<"),
+                                    TextFont {
+                                        font: game_assets.mono_font.clone_weak(),
+                                        font_size: 15.0,
+                                        ..default()
+                                    },
+                                    Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
+                                    BorderRadius::all(Val::Px(5.0)),
+                                    AnimateBackgroundColor,
+                                ))
+                                .observe(
+                                    |_: Trigger<Pointer<Click>>, mut config: ResMut<Config>, mut height_text: Query<&mut Text, With<HeightText>>| {
+                                        config.grid_size.1 -= 1;
+                                        if config.grid_size.1 < 1 {
+                                            config.grid_size.1 = 1;
+                                        }
+                                        height_text.single_mut().unwrap().0 = format!("{:>2}", config.grid_size.1);
+                                    },
+                                );
+                            commands.spawn((
+                                Text::new(" 6"),
+                                TextFont {
+                                    font: game_assets.mono_font.clone_weak(),
+                                    font_size: 15.0,
+                                    ..default()
+                                },
+                                HeightText,
+                            ));
+                            commands
+                                .spawn((
+                                    Node {
+                                        margin: UiRect::horizontal(Val::Px(10.0)),
+                                        ..default()
+                                    },
+                                    Button,
+                                    BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+                                    Text::new(">"),
+                                    TextFont {
+                                        font: game_assets.mono_font.clone_weak(),
+                                        font_size: 15.0,
+                                        ..default()
+                                    },
+                                    Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
+                                    BorderRadius::all(Val::Px(5.0)),
+                                    AnimateBackgroundColor,
+                                ))
+                                .observe(
+                                    |_: Trigger<Pointer<Click>>, mut config: ResMut<Config>, mut height_text: Query<&mut Text, With<HeightText>>| {
+                                        config.grid_size.1 += 1;
+                                        if config.grid_size.1 > 20 {
+                                            config.grid_size.1 = 20;
+                                        }
+                                        height_text.single_mut().unwrap().0 = format!("{:>2}", config.grid_size.1);
+                                    },
+                                );
+                        });
+                });
+            commands
+                .spawn(Node {
+                    margin: UiRect::top(Val::Px(5.0)),
+                    display: Display::Block,
+                    ..default()
+                })
+                .with_children(|commands| {
+                    commands.spawn((
+                        Text::new("Flash intensity"),
+                        TextFont {
+                            font: game_assets.bold_font.clone_weak(),
+                            font_size: 40.0,
+                            ..default()
+                        },
+                    ));
+                    commands
+                        .spawn(Node {
+                            display: Display::Flex,
+                            flex_direction: FlexDirection::Row,
+                            ..default()
+                        })
+                        .with_children(|commands| {
+                            #[derive(Component)]
+                            struct FlashIntensityText;
+                            commands
+                                .spawn((
+                                    Node {
+                                        margin: UiRect::horizontal(Val::Px(10.0)),
+                                        ..default()
+                                    },
+                                    Button,
+                                    BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+                                    Text::new("<"),
+                                    TextFont {
+                                        font: game_assets.mono_font.clone_weak(),
+                                        font_size: 15.0,
+                                        ..default()
+                                    },
+                                    Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
+                                    BorderRadius::all(Val::Px(5.0)),
+                                    AnimateBackgroundColor,
+                                ))
+                                .observe(
+                                    |_: Trigger<Pointer<Click>>,
+                                     mut flash_intensity: ResMut<FlashIntensity>,
+                                     mut flash_intensity_text: Query<&mut Text, With<FlashIntensityText>>| {
+                                        flash_intensity.0 -= 0.1;
+                                        if flash_intensity.0 < 0.0 {
+                                            flash_intensity.0 = 0.0;
+                                        }
+                                        flash_intensity_text.single_mut().unwrap().0 = format!("{:#1.1}", flash_intensity.0);
+                                    },
+                                );
+                            commands.spawn((
+                                Text::new("0.3"),
+                                TextFont {
+                                    font: game_assets.mono_font.clone_weak(),
+                                    font_size: 15.0,
+                                    ..default()
+                                },
+                                FlashIntensityText,
+                            ));
+                            commands
+                                .spawn((
+                                    Node {
+                                        margin: UiRect::horizontal(Val::Px(10.0)),
+                                        ..default()
+                                    },
+                                    Button,
+                                    BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+                                    Text::new(">"),
+                                    TextFont {
+                                        font: game_assets.mono_font.clone_weak(),
+                                        font_size: 15.0,
+                                        ..default()
+                                    },
+                                    Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
+                                    BorderRadius::all(Val::Px(5.0)),
+                                    AnimateBackgroundColor,
+                                ))
+                                .observe(
+                                    |_: Trigger<Pointer<Click>>,
+                                     mut flash_intensity: ResMut<FlashIntensity>,
+                                     mut flash_intensity_text: Query<&mut Text, With<FlashIntensityText>>| {
+                                        flash_intensity.0 += 0.1;
+                                        if flash_intensity.0 > 1.0 {
+                                            flash_intensity.0 = 1.0;
+                                        }
+                                        flash_intensity_text.single_mut().unwrap().0 = format!("{:#1.1}", flash_intensity.0);
+                                    },
+                                );
+                        });
+                });
+            commands
+                .spawn((
+                    Node {
+                        margin: UiRect::top(Val::Px(20.0)),
+                        ..default()
+                    },
+                    Button,
+                    Text::new("Back to main menu"),
+                    TextFont {
+                        font: game_assets.mono_font.clone_weak(),
+                        font_size: 15.0,
+                        ..default()
+                    },
+                    Outline::new(Val::Px(5.0), Val::Px(5.0), Color::WHITE),
+                    BorderRadius::all(Val::Px(5.0)),
+                ))
+                .observe(
+                    |_: Trigger<Pointer<Click>>,
+                     mut commands: Commands,
+                     mut next_state: ResMut<NextState<MainState>>,
+                     mut ui_opacity: ResMut<TargetUiOpacity>,
+                     ui_tree: Query<Entity, With<SettingsUiTree>>| {
                         next_state.set(MainState::Menu);
                         ui_opacity.0 = 0.0;
                         let ui_tree = ui_tree.single().unwrap();
@@ -872,18 +1343,36 @@ fn setup_scene(
     add_hover_observers(
         commands
             .spawn((
-                SceneRoot(
-                    asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/start-game.glb")),
-                ),
+                SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/start-game.glb"))),
                 MenuElement {
                     for_menu: MenuState::Main,
                     target: Transform::from_xyz(-3.5, -0.2, -1.5),
                     side: -1.0,
                 },
             ))
+            .observe(|_: Trigger<Pointer<Click>>, mut next_state: ResMut<NextState<MainState>>| {
+                next_state.set(MainState::Game);
+            }),
+    );
+
+    add_hover_observers(
+        commands
+            .spawn((
+                SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/settings.glb"))),
+                MenuElement {
+                    for_menu: MenuState::Main,
+                    target: Transform::from_xyz(-3.5, -0.2, 3.5),
+                    side: -1.0,
+                },
+            ))
             .observe(
-                |_: Trigger<Pointer<Click>>, mut next_state: ResMut<NextState<MainState>>| {
-                    next_state.set(MainState::Game);
+                |_: Trigger<Pointer<Click>>,
+                 mut next_state: ResMut<NextState<MainState>>,
+                 mut settings_ui_tree: Query<&mut Visibility, With<SettingsUiTree>>,
+                 mut ui_opacity: ResMut<TargetUiOpacity>| {
+                    next_state.set(MainState::DimForUi);
+                    *settings_ui_tree.single_mut().unwrap() = Visibility::Visible;
+                    ui_opacity.0 = 1.0;
                 },
             ),
     );
@@ -891,9 +1380,29 @@ fn setup_scene(
     add_hover_observers(
         commands
             .spawn((
-                SceneRoot(
-                    asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/credits.glb")),
-                ),
+                SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/rules.glb"))),
+                MenuElement {
+                    for_menu: MenuState::Main,
+                    target: Transform::from_xyz(2.1, -0.2, 2.5),
+                    side: 1.0,
+                },
+            ))
+            .observe(
+                |_: Trigger<Pointer<Click>>,
+                 mut next_state: ResMut<NextState<MainState>>,
+                 mut settings_ui_tree: Query<&mut Visibility, With<RulesUiTree>>,
+                 mut ui_opacity: ResMut<TargetUiOpacity>| {
+                    next_state.set(MainState::DimForUi);
+                    *settings_ui_tree.single_mut().unwrap() = Visibility::Visible;
+                    ui_opacity.0 = 1.0;
+                },
+            ),
+    );
+
+    add_hover_observers(
+        commands
+            .spawn((
+                SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/credits.glb"))),
                 MenuElement {
                     for_menu: MenuState::Main,
                     target: Transform::from_xyz(2.05, -0.2, 3.5),
@@ -931,10 +1440,7 @@ fn setup_scene(
         Transform::from_xyz(0.0, 30.0, 0.0),
     ));
 
-    commands.spawn((
-        SceneRoot(game_assets.table_scene.clone_weak()),
-        Transform::from_xyz(0.0, -0.3, 0.0),
-    ));
+    commands.spawn((SceneRoot(game_assets.table_scene.clone_weak()), Transform::from_xyz(0.0, -0.3, 0.0)));
 
     commands.spawn((
         PointLight {
@@ -960,10 +1466,7 @@ fn setup_scene(
         .spawn((
             Orbiter,
             Transform::default(),
-            TargetTransform(Transform::from_rotation(Quat::from_axis_angle(
-                Vec3::Y,
-                0.0,
-            ))),
+            TargetTransform(Transform::from_rotation(Quat::from_axis_angle(Vec3::Y, 0.0))),
             SmoothingSettings {
                 rotation_decay_rate: 3.0,
                 ..default()
@@ -973,19 +1476,14 @@ fn setup_scene(
         .with_children(|commands| {
             commands.spawn((
                 Camera3d::default(),
-                Camera {
-                    hdr: true,
-                    ..default()
-                },
+                Camera { hdr: true, ..default() },
                 Transform::from_xyz(0.0, 12.0, 16.0).looking_to(Dir3::NEG_Z, Dir3::Y),
                 Msaa::Off,
                 #[cfg(not(target_family = "wasm"))]
                 TemporalAntiAliasing::default(),
                 #[cfg(not(target_family = "wasm"))]
                 ShadowFilteringMethod::Temporal,
-                TargetTransform(
-                    Transform::from_xyz(0.0, 12.0, 20.0).looking_to(Dir3::NEG_Z, Dir3::Y),
-                ),
+                TargetTransform(Transform::from_xyz(0.0, 12.0, 20.0).looking_to(Dir3::NEG_Z, Dir3::Y)),
                 SmoothingSettings {
                     translation_decay_rate: 1.0,
                     rotation_decay_rate: 1.0,
@@ -996,11 +1494,7 @@ fn setup_scene(
         });
 }
 
-pub fn ready_for_scatter(
-    mut timer: Local<Timer>,
-    time: Res<Time>,
-    state: Option<Res<State<GameOperation>>>,
-) -> bool {
+pub fn ready_for_scatter(mut timer: Local<Timer>, time: Res<Time>, state: Option<Res<State<GameOperation>>>) -> bool {
     timer.set_mode(TimerMode::Repeating);
     timer.set_duration(Duration::from_millis(500));
 
@@ -1026,19 +1520,14 @@ pub fn scatter_tick(
     mut next_turn: ResMut<NextState<CurrentTurn>>,
     player_config: Res<Config>,
     grid: Res<CellGrid>,
-    mut cells: Query<(
-        &mut DotCell,
-        &DotCellMeta,
-        &mut CellColor,
-        &MeshMaterial3d<StandardMaterial>,
-        &mut Transform,
-    )>,
+    mut cells: Query<(&mut DotCell, &DotCellMeta, &mut CellColor, &MeshMaterial3d<StandardMaterial>, &mut Transform)>,
     time: Res<Time>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut end_game: ResMut<NextState<EndGame>>,
     need_new_board: Res<State<NeedNewBoard>>,
     mut next_need_new_board: ResMut<NextState<NeedNewBoard>>,
     bump_player: Query<Entity, With<BumpPlayer>>,
+    intensity: Res<FlashIntensity>,
 ) {
     let mut scatter_temp = vec![vec![false; grid.width()]; grid.height()];
     let mut do_scatter = false;
@@ -1059,17 +1548,14 @@ pub fn scatter_tick(
         next_need_new_board.set(NeedNewBoard(true));
     }
     if do_scatter {
-        commands
-            .entity(bump_player.single().unwrap())
-            .remove::<AudioSink>(); // Cheap restart
+        commands.entity(bump_player.single().unwrap()).remove::<AudioSink>(); // Cheap restart
         for (y, row) in scatter_temp.iter().enumerate() {
             for (x, &should_scatter) in row.iter().enumerate() {
                 if should_scatter {
-                    let (_, _, new_color, material, mut transform) =
-                        cells.get_mut(grid[y][x]).unwrap();
+                    let (_, _, new_color, material, mut transform) = cells.get_mut(grid[y][x]).unwrap();
                     let new_color = *new_color;
                     let material = materials.get_mut(material.id()).unwrap();
-                    material.emissive = LinearRgba::rgb(30.0, 30.0, 30.0);
+                    material.emissive = LinearRgba::WHITE * 100.0 * intensity.0;
                     transform.translation.y = -0.1;
                     let elapsed = time.elapsed_secs_f64();
                     if x > 0 {
@@ -1131,10 +1617,7 @@ pub fn game_ended(
     if let Ok(mut camera_pos) = camera_pos.single_mut() {
         let (width, height) = config.grid_size;
         let max_dim = (width * 2 / 3).max(height);
-        *camera_pos = TargetTransform(
-            Transform::from_xyz(0.0, max_dim as f32, 2.0 * max_dim as f32)
-                .looking_at(Vec3::ZERO, Vec3::Y),
-        );
+        *camera_pos = TargetTransform(Transform::from_xyz(0.0, max_dim as f32, 2.0 * max_dim as f32).looking_at(Vec3::ZERO, Vec3::Y));
         ui_opacity.0 = 1.0;
         *game_end_ui.single_mut().unwrap() = Visibility::Visible;
         game_end_text.single_mut().unwrap().0 = format!("Player {} wins!", current_turn.0);

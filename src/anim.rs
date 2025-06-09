@@ -159,9 +159,13 @@ fn run_bouncing(
     }
 }
 
+#[derive(Component)]
+pub struct AnimateBackgroundColor;
+
 fn run_ui_opacity(
     text_colors: Query<&mut TextColor>,
     outlines: Query<&mut Outline>,
+    background_colors: Query<&mut BackgroundColor, With<AnimateBackgroundColor>>,
     target_ui_opacity: Res<TargetUiOpacity>,
     time: Res<Time>,
 ) {
@@ -174,5 +178,10 @@ fn run_ui_opacity(
         let mut alpha = outline.color.alpha();
         alpha.smooth_nudge(&target_ui_opacity.0, 5.0, time.delta_secs());
         outline.color.set_alpha(alpha);
+    }
+    for mut background_color in background_colors {
+        let mut alpha = background_color.0.alpha();
+        alpha.smooth_nudge(&target_ui_opacity.0, 5.0, time.delta_secs());
+        background_color.0.set_alpha(alpha);
     }
 }
