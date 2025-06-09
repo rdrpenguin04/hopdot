@@ -4,17 +4,12 @@ use std::{
     time::Duration,
 };
 
-use bevy::{
-    platform::collections::HashSet, prelude::*, render::render_resource::encase::private::Length,
-};
+use bevy::{platform::collections::HashSet, prelude::*, render::render_resource::encase::private::Length};
 use bevy_prng::WyRand;
 use bevy_rand::{global::GlobalEntropy, prelude::Entropy};
 use rand::Rng as _;
 
-use crate::{
-    CellColor, CellGrid, Config, CurrentTurn, Dot, DotCell, GameAssets, GameOperation, GridTray,
-    PlayerConfigEntry, spawn_dot,
-};
+use crate::{CellColor, CellGrid, Config, CurrentTurn, Dot, DotCell, GameAssets, GameOperation, GridTray, PlayerConfigEntry, spawn_dot};
 
 #[derive(Clone, Copy)]
 struct SimpleCell {
@@ -219,21 +214,16 @@ pub fn tick_ai(
                 ..
             },
         ) = cells.get_mut(entity).unwrap();
-        commands.entity(entity).with_related::<Dot>((
-            spawn_dot(*x, *z, &game_assets),
-            ChildOf(grid_tray.single().unwrap()),
-        ));
+        commands
+            .entity(entity)
+            .with_related::<Dot>((spawn_dot(*x, *z, &game_assets), ChildOf(grid_tray.single().unwrap())));
         color.player = current_player.0;
         timer.reset();
         next_state.set(GameOperation::Animating);
     }
 }
 
-fn run_easiest(
-    grid: SimpleGrid,
-    player: usize,
-    rng: &mut Entropy<WyRand>,
-) -> Option<(usize, usize)> {
+fn run_easiest(grid: SimpleGrid, player: usize, rng: &mut Entropy<WyRand>) -> Option<(usize, usize)> {
     let mut new_cells = Vec::new();
     let mut mid_cells = Vec::new();
     let mut full_cells = Vec::new();
@@ -351,11 +341,7 @@ fn run_easy(grid: SimpleGrid, player: usize, rng: &mut Entropy<WyRand>) -> Optio
     None
 }
 
-fn run_medium(
-    grid: SimpleGrid,
-    player: usize,
-    rng: &mut Entropy<WyRand>,
-) -> Option<(usize, usize)> {
+fn run_medium(grid: SimpleGrid, player: usize, rng: &mut Entropy<WyRand>) -> Option<(usize, usize)> {
     let mut corner_count = 0;
     let mut viable_corners = Vec::new();
     for y in [0, grid.height() - 1] {
@@ -389,9 +375,7 @@ fn run_medium(
         // WE WON OMG WE ACTUALLY WON
         return Some(winning_moves[rng.random_range(0..winning_moves.len())]);
     }
-    let max_eval = evals
-        .iter()
-        .fold(baseline_eval, |prev_max, (_, eval)| prev_max.max(*eval));
+    let max_eval = evals.iter().fold(baseline_eval, |prev_max, (_, eval)| prev_max.max(*eval));
     if max_eval - baseline_eval >= 2 {
         // We can actually make a dent if we do something. Let's do it.
         let candidates = evals
@@ -436,9 +420,7 @@ fn run_medium(
         // Okay, we passed the check. It's a candidate move now.
         new_candidates.push(((x, y), eval));
     }
-    let max_eval = new_candidates
-        .iter()
-        .fold(baseline_eval, |prev_max, (_, eval)| prev_max.max(*eval));
+    let max_eval = new_candidates.iter().fold(baseline_eval, |prev_max, (_, eval)| prev_max.max(*eval));
     if !new_candidates.is_empty() {
         let final_candidates = new_candidates
             .into_iter()
@@ -447,9 +429,7 @@ fn run_medium(
         return Some(final_candidates[rng.random_range(0..final_candidates.len())]);
     }
     // If we got here, there are no good moves. Do something so we aren't deadlocked.
-    let max_eval = evals
-        .iter()
-        .fold(baseline_eval, |prev_max, (_, eval)| prev_max.max(*eval));
+    let max_eval = evals.iter().fold(baseline_eval, |prev_max, (_, eval)| prev_max.max(*eval));
     if !evals.is_empty() {
         let really_final_candidates = evals
             .into_iter()

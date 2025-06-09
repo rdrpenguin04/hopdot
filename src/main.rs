@@ -784,7 +784,7 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
                 take first, as they have few neighbors and can be defended easily. The edges come \
                 next.\n\nThe other important thing to avoid is racing. If you have a square near \
                 an opponent's square, and their square has more dots than yours, don't try to \
-                build yours; you'll just give them a more-built cell to work with."
+                build yours; you'll just give them a more-built cell to work with.",
             ];
             ////////////////////////////////////////////////////////////////////////////////////////
             commands.spawn((
