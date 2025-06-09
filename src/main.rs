@@ -232,6 +232,9 @@ pub struct FlashIntensity(f32);
 #[derive(Resource)]
 struct RulesPageNumber(usize);
 
+#[derive(Resource)]
+pub struct SimpleConfig(usize, usize); // TODO: replace this with the actual config
+
 fn main() {
     let mut app = App::new();
     app.add_plugins(DefaultPlugins)
@@ -245,23 +248,23 @@ fn main() {
         app.add_plugins(TemporalAntiAliasPlugin);
     }
 
-    #[cfg(debug_assertions)]
-    {
-        use bevy_inspector_egui::{
-            bevy_egui::EguiPlugin,
-            quick::{StateInspectorPlugin, WorldInspectorPlugin},
-        };
+    // #[cfg(debug_assertions)]
+    // {
+    //     use bevy_inspector_egui::{
+    //         bevy_egui::EguiPlugin,
+    //         quick::{StateInspectorPlugin, WorldInspectorPlugin},
+    //     };
 
-        app.add_plugins((
-            EguiPlugin {
-                enable_multipass_for_primary_context: true,
-            },
-            StateInspectorPlugin::<MainState>::default(),
-            StateInspectorPlugin::<CurrentTurn>::default(),
-            StateInspectorPlugin::<NeedNewBoard>::default(),
-            WorldInspectorPlugin::default(),
-        ));
-    }
+    //     app.add_plugins((
+    //         EguiPlugin {
+    //             enable_multipass_for_primary_context: true,
+    //         },
+    //         StateInspectorPlugin::<MainState>::default(),
+    //         StateInspectorPlugin::<CurrentTurn>::default(),
+    //         StateInspectorPlugin::<NeedNewBoard>::default(),
+    //         WorldInspectorPlugin::default(),
+    //     ));
+    // }
 
     app.init_resource::<GameAssets>()
         .init_resource::<CellGrid>()
@@ -272,6 +275,7 @@ fn main() {
         .insert_resource(ClearColor(Color::srgb_u8(33, 34, 37)))
         .insert_resource(FlashIntensity(0.3))
         .insert_resource(RulesPageNumber(1))
+        .insert_resource(SimpleConfig(1, 0))
         .insert_resource(Config {
             players: vec![
                 PlayerConfigEntry::Human {
@@ -296,7 +300,7 @@ fn main() {
                 // },
                 PlayerConfigEntry::Bot {
                     color: Color::srgb(0.0, 0.0, 1.0),
-                    level: 2,
+                    level: 0,
                 },
             ],
             grid_size: (6, 6),
@@ -343,6 +347,7 @@ fn main() {
         )
         .add_systems(Update, run_splash)
         .add_systems(Update, cleanup_menus)
+        .add_systems(Update, update_config_from_buttons)
         .init_state::<MainState>()
         .init_state::<NeedNewBoard>()
         .init_state::<CurrentTurn>()
@@ -569,7 +574,7 @@ fn fly_to_menu(
         }
     }
     if let Ok(mut camera_pos) = camera_pos.single_mut() {
-        **camera_pos = Transform::from_xyz(0.0, 12.0, 0.0).looking_at(Vec3::ZERO, Vec3::NEG_Z);
+        **camera_pos = Transform::from_xyz(0.0, 16.0, 0.0).looking_at(Vec3::ZERO, Vec3::NEG_Z);
     }
     if let Ok(mut orbiter) = orbiter.single_mut() {
         orbiter.rotation = Quat::from_axis_angle(Vec3::Y, 0.0);
@@ -675,6 +680,76 @@ pub struct SettingsUiTree;
 
 #[derive(Component)]
 pub struct RulesUiTree;
+
+#[derive(Component)]
+struct PlayModeSwitch(usize);
+
+#[derive(Component)]
+struct BotLevelSwitch(usize);
+
+fn update_config_from_buttons(
+    mut buttons: ParamSet<(
+        Query<(&PlayModeSwitch, &mut BackgroundColor, Ref<Interaction>)>,
+        Query<(&BotLevelSwitch, &mut BackgroundColor, Ref<Interaction>)>,
+    )>,
+    mut simple_config: ResMut<SimpleConfig>,
+    mut config: ResMut<Config>,
+) {
+    let mut play_mode = simple_config.0;
+    for (id, _, int) in buttons.p0().iter() {
+        if int.is_changed() && *int == Interaction::Pressed {
+            play_mode = id.0;
+        }
+    }
+    simple_config.0 = play_mode;
+    for (id, mut color, _) in buttons.p0().iter_mut() {
+        color.0 = if id.0 == play_mode {
+            Color::srgba(0.4, 0.4, 0.4, color.0.alpha())
+        } else {
+            Color::srgba(0.2, 0.2, 0.2, color.0.alpha())
+        };
+    }
+    let mut bot_level = simple_config.1;
+    for (id, _, int) in buttons.p1().iter() {
+        if int.is_changed() && *int == Interaction::Pressed {
+            bot_level = id.0;
+        }
+    }
+    simple_config.1 = bot_level;
+    for (id, mut color, _) in buttons.p1().iter_mut() {
+        color.0 = if id.0 == bot_level {
+            Color::srgba(0.4, 0.4, 0.4, color.0.alpha())
+        } else {
+            Color::srgba(0.2, 0.2, 0.2, color.0.alpha())
+        };
+    }
+    if simple_config.is_changed() {
+        config.players = vec![
+            if play_mode == 2 {
+                PlayerConfigEntry::Bot {
+                    color: Color::srgb(0.0, 1.0, 0.0),
+                    level: bot_level,
+                }
+            } else {
+                PlayerConfigEntry::Human {
+                    color: Color::srgb(0.0, 1.0, 0.0),
+                    name: "Player 1".into(),
+                }
+            },
+            if play_mode == 0 {
+                PlayerConfigEntry::Human {
+                    color: Color::srgb(0.0, 0.0, 1.0),
+                    name: "Player 2".into(),
+                }
+            } else {
+                PlayerConfigEntry::Bot {
+                    color: Color::srgb(0.0, 0.0, 1.0),
+                    level: bot_level,
+                }
+            },
+        ];
+    }
+}
 
 fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_server: Res<AssetServer>) {
     commands.spawn((
@@ -796,7 +871,7 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
                 Text::new(RULES_PAGES[0]),
                 TextFont {
                     font: game_assets.mono_font.clone_weak(),
-                    font_size: 15.0,
+                    font_size: 20.0,
                     ..default()
                 },
                 RulesText,
@@ -806,6 +881,7 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
                     margin: UiRect::top(Val::Px(20.0)),
                     display: Display::Flex,
                     flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
                     ..default()
                 })
                 .with_children(|commands| {
@@ -816,7 +892,7 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
                         Text::new("Page: "),
                         TextFont {
                             font: game_assets.mono_font.clone_weak(),
-                            font_size: 15.0,
+                            font_size: 20.0,
                             ..default()
                         },
                     ));
@@ -855,7 +931,7 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
                         Text::new("1"),
                         TextFont {
                             font: game_assets.mono_font.clone_weak(),
-                            font_size: 15.0,
+                            font_size: 20.0,
                             ..default()
                         },
                         RulesPageNumberText,
@@ -892,6 +968,38 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
                             },
                         );
                 });
+            commands
+                .spawn((
+                    Node {
+                        margin: UiRect::top(Val::Px(20.0)),
+                        ..default()
+                    },
+                    Button,
+                    Text::new("Back to main menu"),
+                    TextFont {
+                        font: game_assets.mono_font.clone_weak(),
+                        font_size: 20.0,
+                        ..default()
+                    },
+                    Outline::new(Val::Px(5.0), Val::Px(5.0), Color::WHITE),
+                    BorderRadius::all(Val::Px(5.0)),
+                ))
+                .observe(
+                    |_: Trigger<Pointer<Click>>,
+                     mut commands: Commands,
+                     mut next_state: ResMut<NextState<MainState>>,
+                     mut ui_opacity: ResMut<TargetUiOpacity>,
+                     ui_tree: Query<Entity, With<RulesUiTree>>| {
+                        next_state.set(MainState::Menu);
+                        ui_opacity.0 = 0.0;
+                        let ui_tree = ui_tree.single().unwrap();
+                        commands.spawn_task(move || async move {
+                            AsyncWorld.sleep(1.0).await;
+                            fetch!(ui_tree, Visibility).get_mut(|x| *x = Visibility::Hidden)?;
+                            Ok(())
+                        });
+                    },
+                );
         });
 
     commands
@@ -932,7 +1040,161 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
                             ..default()
                         },
                     ));
-                    // TODO
+                    commands
+                        .spawn(Node {
+                            margin: UiRect::top(Val::Px(20.0)),
+                            display: Display::Flex,
+                            flex_direction: FlexDirection::Row,
+                            ..default()
+                        })
+                        .with_children(|commands| {
+                            commands.spawn((
+                                Text::new("mode: "),
+                                TextFont {
+                                    font: game_assets.mono_font.clone_weak(),
+                                    font_size: 20.0,
+                                    ..default()
+                                },
+                            ));
+                            commands.spawn((
+                                Node {
+                                    margin: UiRect::horizontal(Val::Px(10.0)),
+                                    ..default()
+                                },
+                                Button,
+                                BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+                                Text::new("Player vs. Player"),
+                                TextFont {
+                                    font: game_assets.mono_font.clone_weak(),
+                                    font_size: 15.0,
+                                    ..default()
+                                },
+                                Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
+                                BorderRadius::all(Val::Px(5.0)),
+                                AnimateBackgroundColor,
+                                PlayModeSwitch(0),
+                            ));
+                            commands.spawn((
+                                Node {
+                                    margin: UiRect::horizontal(Val::Px(10.0)),
+                                    ..default()
+                                },
+                                Button,
+                                BackgroundColor(Color::srgb(0.4, 0.4, 0.4)),
+                                Text::new("Player vs. Bot"),
+                                TextFont {
+                                    font: game_assets.mono_font.clone_weak(),
+                                    font_size: 15.0,
+                                    ..default()
+                                },
+                                Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
+                                BorderRadius::all(Val::Px(5.0)),
+                                AnimateBackgroundColor,
+                                PlayModeSwitch(1),
+                            ));
+                            commands.spawn((
+                                Node {
+                                    margin: UiRect::horizontal(Val::Px(10.0)),
+                                    ..default()
+                                },
+                                Button,
+                                BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+                                Text::new("Bot vs. Bot"),
+                                TextFont {
+                                    font: game_assets.mono_font.clone_weak(),
+                                    font_size: 15.0,
+                                    ..default()
+                                },
+                                Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
+                                BorderRadius::all(Val::Px(5.0)),
+                                AnimateBackgroundColor,
+                                PlayModeSwitch(2),
+                            ));
+                        });
+                    commands
+                        .spawn(Node {
+                            margin: UiRect::top(Val::Px(20.0)),
+                            display: Display::Flex,
+                            flex_direction: FlexDirection::Row,
+                            align_items: AlignItems::Center,
+                            ..default()
+                        })
+                        .with_children(|commands| {
+                            commands.spawn((
+                                Text::new("bot level: "),
+                                TextFont {
+                                    font: game_assets.mono_font.clone_weak(),
+                                    font_size: 20.0,
+                                    ..default()
+                                },
+                            ));
+                            commands.spawn((
+                                Node {
+                                    margin: UiRect::horizontal(Val::Px(10.0)),
+                                    ..default()
+                                },
+                                Button,
+                                BackgroundColor(Color::srgb(0.4, 0.4, 0.4)),
+                                Text::new("Easiest"),
+                                TextFont {
+                                    font: game_assets.mono_font.clone_weak(),
+                                    font_size: 15.0,
+                                    ..default()
+                                },
+                                Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
+                                BorderRadius::all(Val::Px(5.0)),
+                                AnimateBackgroundColor,
+                                BotLevelSwitch(0),
+                            ));
+                            commands.spawn((
+                                Node {
+                                    margin: UiRect::horizontal(Val::Px(10.0)),
+                                    ..default()
+                                },
+                                Button,
+                                BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+                                Text::new("Easy"),
+                                TextFont {
+                                    font: game_assets.mono_font.clone_weak(),
+                                    font_size: 15.0,
+                                    ..default()
+                                },
+                                Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
+                                BorderRadius::all(Val::Px(5.0)),
+                                AnimateBackgroundColor,
+                                BotLevelSwitch(1),
+                            ));
+                            commands.spawn((
+                                Node {
+                                    margin: UiRect::horizontal(Val::Px(10.0)),
+                                    ..default()
+                                },
+                                Button,
+                                BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+                                Text::new("Medium"),
+                                TextFont {
+                                    font: game_assets.mono_font.clone_weak(),
+                                    font_size: 15.0,
+                                    ..default()
+                                },
+                                Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
+                                BorderRadius::all(Val::Px(5.0)),
+                                AnimateBackgroundColor,
+                                BotLevelSwitch(2),
+                            ));
+                            commands.spawn((
+                                Node {
+                                    width: Val::Px(100.0),
+                                    ..default()
+                                },
+                                Text::new("more levels coming soon, I just ran out of time before the deadline"),
+                                TextFont {
+                                    font: game_assets.mono_font.clone_weak(),
+                                    font_size: 8.0,
+                                    ..default()
+                                },
+                            ));
+                        });
                 });
             commands
                 .spawn(Node {
@@ -954,6 +1216,7 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
                             margin: UiRect::top(Val::Px(10.0)),
                             display: Display::Flex,
                             flex_direction: FlexDirection::Row,
+                            align_items: AlignItems::Center,
                             ..default()
                         })
                         .with_children(|commands| {
@@ -963,7 +1226,7 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
                                 Text::new("width: "),
                                 TextFont {
                                     font: game_assets.mono_font.clone_weak(),
-                                    font_size: 15.0,
+                                    font_size: 20.0,
                                     ..default()
                                 },
                             ));
@@ -998,7 +1261,7 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
                                 Text::new(" 6"),
                                 TextFont {
                                     font: game_assets.mono_font.clone_weak(),
-                                    font_size: 15.0,
+                                    font_size: 20.0,
                                     ..default()
                                 },
                                 WidthText,
@@ -1033,9 +1296,10 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
                         });
                     commands
                         .spawn(Node {
-                            margin: UiRect::top(Val::Px(10.0)),
+                            margin: UiRect::top(Val::Px(20.0)),
                             display: Display::Flex,
                             flex_direction: FlexDirection::Row,
+                            align_items: AlignItems::Center,
                             ..default()
                         })
                         .with_children(|commands| {
@@ -1045,7 +1309,7 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
                                 Text::new("height: "),
                                 TextFont {
                                     font: game_assets.mono_font.clone_weak(),
-                                    font_size: 15.0,
+                                    font_size: 20.0,
                                     ..default()
                                 },
                             ));
@@ -1080,7 +1344,7 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
                                 Text::new(" 6"),
                                 TextFont {
                                     font: game_assets.mono_font.clone_weak(),
-                                    font_size: 15.0,
+                                    font_size: 20.0,
                                     ..default()
                                 },
                                 HeightText,
@@ -1171,7 +1435,7 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
                                 Text::new("0.3"),
                                 TextFont {
                                     font: game_assets.mono_font.clone_weak(),
-                                    font_size: 15.0,
+                                    font_size: 20.0,
                                     ..default()
                                 },
                                 FlashIntensityText,
@@ -1217,7 +1481,7 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
                     Text::new("Back to main menu"),
                     TextFont {
                         font: game_assets.mono_font.clone_weak(),
-                        font_size: 15.0,
+                        font_size: 20.0,
                         ..default()
                     },
                     Outline::new(Val::Px(5.0), Val::Px(5.0), Color::WHITE),
@@ -1273,7 +1537,7 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
                     Text::new("Coding and most assets by Ray Redondo\nOriginal concept from KJumpingCube\n\nThis game is open source! Check it out at https://github.com/rdrpenguin04/hopdot"),
                     TextFont {
                         font: game_assets.mono_font.clone_weak(),
-                        font_size: 15.0,
+                        font_size: 20.0,
                         ..default()
                     },
                 ));
@@ -1287,7 +1551,7 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
                     Text::new("Back to main menu"),
                     TextFont {
                         font: game_assets.mono_font.clone_weak(),
-                        font_size: 15.0,
+                        font_size: 20.0,
                         ..default()
                     },
                     Outline::new(Val::Px(5.0), Val::Px(5.0), Color::WHITE),
