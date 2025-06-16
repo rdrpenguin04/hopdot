@@ -67,14 +67,17 @@ impl SimpleGrid {
         result[y][x].owner = player;
 
         let mut visited = HashSet::new();
+        let mut visited_count = 0;
         let mut cascade_queue = VecDeque::from([(x, y)]);
 
         while let Some((x, y)) = cascade_queue.pop_front() {
             // We've hit every square on the board. The game is over.
-            if visited.len() == result.width() * result.height() {
+            if visited_count == result.width() * result.height() {
                 return None;
             }
-            visited.insert((x, y));
+            if visited.insert((x, y)) {
+                visited_count += 1;
+            }
             result[y][x].owner = player;
             if result[y][x].dots > result[y][x].capacity {
                 result[y][x].dots -= result[y][x].capacity;
