@@ -2526,7 +2526,7 @@ checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 
 [[package]]
 name = "hopdot"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "bevy",
  "bevy_defer",
@@ -2535,7 +2535,12 @@ dependencies = [
  "getrandom 0.3.3",
  "log",
  "rand 0.9.1",
+ "tracing",
 ]
+
+[[package]]
+name = "hopdot-server"
+version = "1.0.0"
 
 [[package]]
 name = "image"
