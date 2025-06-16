@@ -424,13 +424,14 @@ fn cleanup_menus(
 }
 
 fn run_splash(
-    splash: Query<&MeshMaterial3d<StandardMaterial>, With<Splash>>,
+    mut commands: Commands,
+    splash: Query<(Entity, &MeshMaterial3d<StandardMaterial>), With<Splash>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     cur_state: Res<State<MainState>>,
     mut next_state: ResMut<NextState<MainState>>,
     time: Res<Time>,
 ) {
-    let Ok(splash_material) = splash.single() else {
+    let Ok((splash, splash_material)) = splash.single() else {
         return;
     };
     let Some(splash_material) = materials.get_mut(splash_material.id()) else {
@@ -462,7 +463,14 @@ fn run_splash(
             tmp.smooth_nudge(&Vec4::ONE, 3.0, time.delta_secs());
             splash_material.emissive = LinearRgba::from_vec4(tmp);
         }
-        4.0.. => next_state.set(MainState::Menu),
+        4.0.. => {
+            next_state.set(MainState::Menu);
+            commands.spawn_task(move || async move {
+                AsyncWorld.sleep(1.0).await;
+                fetch!(splash, Visibility).get_mut(|x| *x = Visibility::Hidden)?;
+                Ok(())
+            });
+        }
         _ => {} // IDK what happened here
     }
 }
