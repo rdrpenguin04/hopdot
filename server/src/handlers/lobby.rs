@@ -15,10 +15,7 @@ use crate::session::extract_session;
 
 #[derive(Deserialize, Serialize)]
 enum RoomVisibility {
-    Public {
-        min_elo: usize,
-        max_elo: usize,
-    },
+    Public { min_elo: usize, max_elo: usize },
     Private,
 }
 

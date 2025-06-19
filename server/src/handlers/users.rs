@@ -21,7 +21,10 @@ pub async fn add_user(_body: web::Json<UserSignupInfo>) -> impl Responder {
     HttpResponse::Created().json(CreateSuccess { status: "success" })
 }
 
-pub async fn remove_user(auth: BearerAuth, user_id: web::Path<Uuid>) -> actix_web::Result<impl Responder> {
+pub async fn remove_user(
+    auth: BearerAuth,
+    user_id: web::Path<Uuid>,
+) -> actix_web::Result<impl Responder> {
     let session = extract_session(auth.token())?;
     if session.user_id == user_id.into_inner() {
         Ok(HttpResponse::NoContent().finish())
