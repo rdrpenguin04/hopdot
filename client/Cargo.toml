@@ -10,9 +10,16 @@ bevy = { version = "0.16.1", features = ["experimental_pbr_pcss", "flac"] }
 bevy_defer = "0.14.0"
 bevy_prng = { version = "0.11.0", features = ["wyrand"] }
 bevy_rand = "0.11.0"
-log = { version = "*", features = ["max_level_debug", "release_max_level_warn"] }
-tracing = { version = "*", features = ["max_level_debug", "release_max_level_warn"] }
+bevy_skein = "0.2.1"
+log = { version = "*", features = [
+    "max_level_debug",
+    "release_max_level_warn",
+] }
 rand = "0.9.1"
+tracing = { version = "*", features = [
+    "max_level_debug",
+    "release_max_level_warn",
+] }
 
 [target.wasm32-unknown-unknown.dependencies]
 getrandom = { version = "0.3", features = ["wasm_js"] }

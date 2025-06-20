@@ -50,7 +50,7 @@ impl FromWorld for GameAssets {
         let splash_image = asset_server.load("tex/splash.png");
 
         let mut meshes = world.resource_mut::<Assets<_>>();
-        let dot_mesh = meshes.add(Sphere::new(0.1));
+        let dot_mesh = meshes.add(Sphere::new(0.1).mesh().ico(2).unwrap());
         let tile_mesh = meshes.add(Cuboid::new(0.95, 0.1, 0.95));
         let splash_mesh = meshes.add(Rectangle::new(7.2, 4.0));
 
