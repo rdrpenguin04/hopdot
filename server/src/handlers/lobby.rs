@@ -19,6 +19,7 @@ enum RoomVisibility {
     Private,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 enum LobbyCommand {
     Create {
@@ -39,6 +40,7 @@ struct RoomInfo {
     players: Vec<Uuid>,
 }
 
+#[allow(dead_code)]
 #[derive(Serialize)]
 enum LobbyUpdate {
     CurrentLobby(HashMap<Uuid, RoomInfo>),
@@ -52,11 +54,13 @@ enum LobbyUpdate {
     },
 }
 
+#[allow(dead_code)]
 #[derive(Default)]
 pub struct LobbyData {
     rooms: HashMap<Uuid, RoomInfo>,
 }
 
+#[allow(unused_variables)]
 pub async fn ws(
     auth: BearerAuth,
     req: HttpRequest,

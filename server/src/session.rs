@@ -36,7 +36,7 @@ impl From<String> for SessionError {
     }
 }
 
-const SECRET: LazyLock<Vec<u8>> = LazyLock::new(|| b"temp key".into());
+static SECRET: LazyLock<Vec<u8>> = LazyLock::new(|| b"temp key".into());
 
 pub fn new_session(session_data: SessionData) -> Result<String, SessionError> {
     let header = json_object! {
@@ -44,13 +44,15 @@ pub fn new_session(session_data: SessionData) -> Result<String, SessionError> {
     };
     let mut payload = Vec::new();
     serde_json::to_writer(&mut payload, &session_data).map_err(|e| e.to_string())?;
+    let secret = &*SECRET;
     let encoded =
-        encode_sign(header, &payload, &Hs256Signer::new(&*SECRET)).map_err(|e| e.to_string())?;
+        encode_sign(header, &payload, &Hs256Signer::new(secret)).map_err(|e| e.to_string())?;
     Ok(encoded.into_data())
 }
 
 pub fn extract_session(token: &str) -> Result<SessionData, SessionError> {
+    let secret = &*SECRET;
     let decoded =
-        decode_verify(token.as_bytes(), &HmacVerifier::new(&*SECRET)).map_err(|e| e.to_string())?;
+        decode_verify(token.as_bytes(), &HmacVerifier::new(secret)).map_err(|e| e.to_string())?;
     serde_json::from_slice(&decoded.payload).map_err(|e| e.to_string().into())
 }

@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use crate::{db, session::extract_session};
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 pub struct UserSignupInfo {
     email: String,

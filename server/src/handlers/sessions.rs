@@ -1,9 +1,10 @@
-use actix_web::{HttpResponse, Responder, web};
+use actix_web::{Responder, web};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::session::{SessionData, new_session};
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 pub struct UserLoginInfo {
     username: String,
