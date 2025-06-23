@@ -26,3 +26,17 @@ debug-assertions = false
 [profile.release]
 codegen-units = 1
 lto = "thin"
+
+[profile.ci]
+inherits = "dev"
+opt-level = 0
+debug = "line-tables-only"
+codegen-units = 4
+
+[profile.ci.package."*"]
+opt-level = 0
+
+[profile.web-release]
+inherits = "release"
+opt-level = "s"
+strip = "debuginfo"
