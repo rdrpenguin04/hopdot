@@ -21,6 +21,11 @@ tracing = { version = "*", features = [
     "release_max_level_warn",
 ] }
 
+[features]
+default = ["dev_native"]
+dev = []
+dev_native = []
+
 [target.wasm32-unknown-unknown.dependencies]
 getrandom = { version = "0.3", features = ["wasm_js"] }
 
