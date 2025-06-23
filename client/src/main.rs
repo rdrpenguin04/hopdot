@@ -20,6 +20,7 @@ use bevy::{
 use bevy_defer::{AsyncAccess, AsyncCommandsExtension, AsyncPlugin, AsyncWorld, fetch};
 use bevy_prng::WyRand;
 use bevy_rand::plugin::EntropyPlugin;
+use bevy_skein::SkeinPlugin;
 
 use crate::anim::{AnimateBackgroundColor, Bouncing, SmoothingSettings, TargetTransform, TargetUiOpacity};
 
@@ -241,6 +242,7 @@ fn main() {
         .add_plugins(AsyncPlugin::default_settings())
         .add_plugins(MeshPickingPlugin)
         .add_plugins(EntropyPlugin::<WyRand>::default())
+        .add_plugins(SkeinPlugin::default())
         .add_plugins(anim::plugin);
 
     #[cfg(not(target_family = "wasm"))]

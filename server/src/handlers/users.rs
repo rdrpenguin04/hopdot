@@ -1,9 +1,10 @@
-use actix_web::{HttpResponse, Responder, web};
+use actix_web::{web::{self, Data}, HttpResponse, Responder};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::session::extract_session;
+use crate::{db, session::extract_session};
 
 #[derive(Deserialize)]
 pub struct UserSignupInfo {
@@ -17,7 +18,9 @@ pub struct CreateSuccess {
     status: &'static str,
 }
 
-pub async fn add_user(_body: web::Json<UserSignupInfo>) -> impl Responder {
+pub async fn add_user(conn: Data<Connection>, _body: web::Json<UserSignupInfo>) -> impl Responder {
+    // TODO: call db::create_user and check result
+    db::init(&conn);
     HttpResponse::Created().json(CreateSuccess { status: "success" })
 }
 
