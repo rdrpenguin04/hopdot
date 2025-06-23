@@ -24,7 +24,7 @@ env:
   cargo_build_binary_name: hopdot
 
   # The path to the assets directory.
-  assets_path: assets
+  assets_path: client/assets
 
   # Whether to build and package a release for a given target platform.
   build_for_web: true
