@@ -1,4 +1,7 @@
-use actix_web::{web::{self, Data}, HttpResponse, Responder};
+use actix_web::{
+    HttpResponse, Responder,
+    web::{self, Data},
+};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
