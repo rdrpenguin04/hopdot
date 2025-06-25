@@ -1,5 +1,6 @@
 pub mod ai;
 pub mod anim;
+pub mod menu;
 
 use std::{
     ops::{Index, IndexMut},
@@ -22,7 +23,10 @@ use bevy_prng::WyRand;
 use bevy_rand::plugin::EntropyPlugin;
 use bevy_skein::SkeinPlugin;
 
-use crate::anim::{AnimateBackgroundColor, Bouncing, SmoothingSettings, TargetTransform, TargetUiOpacity};
+use crate::{
+    anim::{AnimateBackgroundColor, Bouncing, SmoothingSettings, TargetTransform, TargetUiOpacity},
+    menu::{MenuElement, MenuState},
+};
 
 #[derive(Resource, Reflect)]
 pub struct GameAssets {
@@ -161,22 +165,6 @@ impl Default for NeedNewBoard {
 #[require(Transform, Visibility)]
 pub struct GridTray;
 
-#[derive(Component)]
-#[require(TargetTransform(Transform::default()), SmoothingSettings { translation_decay_rate: 3.0, scale_decay_rate: 10.0, ..default() }, Visibility::Hidden)]
-pub struct MenuElement {
-    for_menu: MenuState,
-    target: Transform,
-    side: f32, // -1.0 or 1.0, probably
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect, SubStates)]
-#[source(MainState = MainState::Menu)]
-pub enum MenuState {
-    #[default]
-    Main,
-    Pause,
-}
-
 impl CellGrid {
     pub fn new(width: usize, height: usize) -> Self {
         Self {
@@ -243,7 +231,8 @@ fn main() {
         .add_plugins(MeshPickingPlugin)
         .add_plugins(EntropyPlugin::<WyRand>::default())
         .add_plugins(SkeinPlugin::default())
-        .add_plugins(anim::plugin);
+        .add_plugins(anim::plugin)
+        .add_plugins(menu::plugin);
 
     #[cfg(not(target_family = "wasm"))]
     {
@@ -320,22 +309,12 @@ fn main() {
                 light.intensity = 1_000_000.0;
             }
         })
-        .add_systems(Update, switch_menus.run_if(state_changed::<MenuState>.or(state_changed::<MainState>)))
         .add_systems(
             OnEnter(MainState::Menu),
             (fly_to_menu, |mut end_game: ResMut<NextState<EndGame>>| {
                 // Defend against some nonsense
                 end_game.set(EndGame { game_ended: false });
             }),
-        )
-        .add_systems(
-            Update,
-            (|key_input: Res<ButtonInput<KeyCode>>, mut main_state: ResMut<NextState<MainState>>| {
-                if key_input.just_pressed(KeyCode::Escape) {
-                    main_state.set(MainState::Game);
-                }
-            })
-            .run_if(in_state(MenuState::Pause)),
         )
         .add_systems(
             Update,
@@ -348,13 +327,11 @@ fn main() {
                 .run_if(in_state(MainState::Game)),
         )
         .add_systems(Update, run_splash)
-        .add_systems(Update, cleanup_menus)
         .add_systems(Update, update_config_from_buttons)
         .init_state::<MainState>()
         .init_state::<NeedNewBoard>()
         .init_state::<CurrentTurn>()
         .init_state::<GameOperation>()
-        .add_sub_state::<MenuState>()
         .add_sub_state::<EndGame>()
         .register_type::<GameAssets>()
         .register_type::<CellColor>()
@@ -376,54 +353,6 @@ pub struct Splash;
 
 #[derive(Component)]
 pub struct BumpPlayer;
-
-fn switch_menus(
-    cur_menu: Option<Res<State<MenuState>>>,
-    mut prev_menu: Local<Option<MenuState>>,
-    menu_elements: Query<(&MenuElement, &mut TargetTransform, &mut Transform, &mut Visibility)>,
-) {
-    for (el, mut target, mut transform, mut visibility) in menu_elements {
-        if *prev_menu == Some(el.for_menu) {
-            // Fly out
-            let mut new_transform = el.target;
-            new_transform.translation += vec3(0.0, 0.0, -20.0);
-            target.0 = new_transform;
-        }
-        if let Some(ref cur_menu) = cur_menu
-            && **cur_menu == el.for_menu
-        {
-            // Fly in
-            let mut new_transform = el.target;
-            new_transform.translation += el.side * vec3(20.0, 0.0, 0.0);
-            *transform = new_transform;
-            target.0 = el.target;
-            *visibility = Visibility::Inherited;
-        }
-    }
-    *prev_menu = cur_menu.map(|x| **x);
-}
-
-fn cleanup_menus(
-    cur_menu: Option<Res<State<MenuState>>>,
-    mut prev_menu: Local<Option<MenuState>>,
-    menu_elements: Query<(&MenuElement, &mut Visibility)>,
-    mut timer: Local<Timer>,
-    time: Res<Time>,
-) {
-    timer.set_duration(Duration::from_secs(1));
-    if cur_menu.as_ref().map(|x| ***x) != *prev_menu {
-        timer.reset();
-    }
-    timer.tick(time.delta());
-    if timer.just_finished() {
-        for (el, mut visibility) in menu_elements {
-            if cur_menu.as_ref().map(|x| ***x) != Some(el.for_menu) {
-                *visibility = Visibility::Hidden;
-            }
-        }
-    }
-    *prev_menu = cur_menu.map(|x| **x);
-}
 
 fn run_splash(
     mut commands: Commands,
@@ -1609,97 +1538,59 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
         SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/hopdot.glb"))),
         MenuElement {
             for_menu: MenuState::Main,
-            target: Transform::from_xyz(-3.5, -0.2, -3.0),
+            target: None,
+            menu_action: None,
+            side: -1.0,
+        },
+        Transform::from_xyz(-3.5, -0.2, -3.0),
+    ));
+
+    commands.spawn((
+        SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/start-game.glb"))),
+        MenuElement {
+            for_menu: MenuState::Main,
+            target: Some(Transform::from_xyz(-3.5, -0.2, -1.5)),
+            menu_action: Some("start-game"),
             side: -1.0,
         },
     ));
 
-    add_hover_observers(
-        commands
-            .spawn((
-                SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/start-game.glb"))),
-                MenuElement {
-                    for_menu: MenuState::Main,
-                    target: Transform::from_xyz(-3.5, -0.2, -1.5),
-                    side: -1.0,
-                },
-            ))
-            .observe(|_: Trigger<Pointer<Click>>, mut next_state: ResMut<NextState<MainState>>| {
-                next_state.set(MainState::Game);
-            }),
-    );
+    commands.spawn((
+        SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/settings.glb"))),
+        MenuElement {
+            for_menu: MenuState::Main,
+            target: Some(Transform::from_xyz(-3.5, -0.2, 3.5)),
+            menu_action: Some("settings"),
+            side: -1.0,
+        },
+    ));
 
-    add_hover_observers(
-        commands
-            .spawn((
-                SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/settings.glb"))),
-                MenuElement {
-                    for_menu: MenuState::Main,
-                    target: Transform::from_xyz(-3.5, -0.2, 3.5),
-                    side: -1.0,
-                },
-            ))
-            .observe(
-                |_: Trigger<Pointer<Click>>,
-                 mut next_state: ResMut<NextState<MainState>>,
-                 mut settings_ui_tree: Query<&mut Visibility, With<SettingsUiTree>>,
-                 mut ui_opacity: ResMut<TargetUiOpacity>| {
-                    next_state.set(MainState::DimForUi);
-                    *settings_ui_tree.single_mut().unwrap() = Visibility::Visible;
-                    ui_opacity.0 = 1.0;
-                },
-            ),
-    );
+    commands.spawn((
+        SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/rules.glb"))),
+        MenuElement {
+            for_menu: MenuState::Main,
+            target: Some(Transform::from_xyz(2.1, -0.2, 2.5)),
+            menu_action: Some("rules"),
+            side: 1.0,
+        },
+    ));
 
-    add_hover_observers(
-        commands
-            .spawn((
-                SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/rules.glb"))),
-                MenuElement {
-                    for_menu: MenuState::Main,
-                    target: Transform::from_xyz(2.1, -0.2, 2.5),
-                    side: 1.0,
-                },
-            ))
-            .observe(
-                |_: Trigger<Pointer<Click>>,
-                 mut next_state: ResMut<NextState<MainState>>,
-                 mut settings_ui_tree: Query<&mut Visibility, With<RulesUiTree>>,
-                 mut ui_opacity: ResMut<TargetUiOpacity>| {
-                    next_state.set(MainState::DimForUi);
-                    *settings_ui_tree.single_mut().unwrap() = Visibility::Visible;
-                    ui_opacity.0 = 1.0;
-                },
-            ),
-    );
-
-    add_hover_observers(
-        commands
-            .spawn((
-                SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/credits.glb"))),
-                MenuElement {
-                    for_menu: MenuState::Main,
-                    target: Transform::from_xyz(2.05, -0.2, 3.5),
-                    side: 1.0,
-                },
-            ))
-            .observe(
-                |_: Trigger<Pointer<Click>>,
-                 mut next_state: ResMut<NextState<MainState>>,
-                 mut credits_ui_tree: Query<&mut Visibility, With<CreditsUiTree>>,
-                 mut ui_opacity: ResMut<TargetUiOpacity>| {
-                    next_state.set(MainState::DimForUi);
-                    *credits_ui_tree.single_mut().unwrap() = Visibility::Visible;
-                    ui_opacity.0 = 1.0;
-                },
-            ),
-    );
+    commands.spawn((
+        SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/credits.glb"))),
+        MenuElement {
+            for_menu: MenuState::Main,
+            target: Some(Transform::from_xyz(2.05, -0.2, 3.5)),
+            menu_action: Some("credits"),
+            side: 1.0,
+        },
+    ));
 
     commands.spawn((
         SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/gamepaused.glb"))),
         MenuElement {
             for_menu: MenuState::Pause,
-            target: Transform::from_xyz(-3.5, -0.2, -3.0),
+            target: Some(Transform::from_xyz(-3.5, -0.2, -3.0)),
+            menu_action: None,
             side: -1.0,
         },
     ));
