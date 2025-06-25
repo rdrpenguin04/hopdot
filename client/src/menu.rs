@@ -6,7 +6,8 @@ use bevy::{
 };
 
 use crate::{
-    add_hover_observers, anim::{SmoothingSettings, TargetTransform, TargetUiOpacity}, CreditsUiTree, MainState, RulesUiTree, SettingsUiTree
+    CreditsUiTree, MainState, RulesUiTree, SettingsUiTree, add_hover_observers,
+    anim::{SmoothingSettings, TargetTransform, TargetUiOpacity},
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect, SubStates)]
