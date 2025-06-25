@@ -40,60 +40,57 @@ fn insert_menu_element(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
     if menu_element.target.is_none() {
         menu_element.target = Some(transform);
     }
-    let menu_action = menu_element.menu_action.clone();
-    match menu_action {
-        Some(action) => {
-            let mut commands = world.commands();
-            let mut entity_commands = commands.entity(entity);
-            add_hover_observers(&mut entity_commands);
-            match action {
-                "credits" => {
-                    entity_commands.observe(
-                        |_: Trigger<Pointer<Click>>,
-                         mut next_state: ResMut<NextState<MainState>>,
-                         mut credits_ui_tree: Query<&mut Visibility, With<CreditsUiTree>>,
-                         mut ui_opacity: ResMut<TargetUiOpacity>| {
-                            next_state.set(MainState::DimForUi);
-                            *credits_ui_tree.single_mut().unwrap() = Visibility::Visible;
-                            ui_opacity.0 = 1.0;
-                        },
-                    );
-                }
-                "rules" => {
-                    entity_commands.observe(
-                        |_: Trigger<Pointer<Click>>,
-                         mut next_state: ResMut<NextState<MainState>>,
-                         mut settings_ui_tree: Query<&mut Visibility, With<RulesUiTree>>,
-                         mut ui_opacity: ResMut<TargetUiOpacity>| {
-                            next_state.set(MainState::DimForUi);
-                            *settings_ui_tree.single_mut().unwrap() = Visibility::Visible;
-                            ui_opacity.0 = 1.0;
-                        },
-                    );
-                }
-                "settings" => {
-                    entity_commands.observe(
-                        |_: Trigger<Pointer<Click>>,
-                         mut next_state: ResMut<NextState<MainState>>,
-                         mut settings_ui_tree: Query<&mut Visibility, With<SettingsUiTree>>,
-                         mut ui_opacity: ResMut<TargetUiOpacity>| {
-                            next_state.set(MainState::DimForUi);
-                            *settings_ui_tree.single_mut().unwrap() = Visibility::Visible;
-                            ui_opacity.0 = 1.0;
-                        },
-                    );
-                }
-                "start-game" => {
-                    entity_commands.observe(|_: Trigger<Pointer<Click>>, mut next_state: ResMut<NextState<MainState>>| {
-                        next_state.set(MainState::Game);
-                    });
-                }
-                x => {
-                    warn!("unknown action: {x}");
-                }
+    let menu_action = menu_element.menu_action;
+    if let Some(action) = menu_action {
+        let mut commands = world.commands();
+        let mut entity_commands = commands.entity(entity);
+        add_hover_observers(&mut entity_commands);
+        match action {
+            "credits" => {
+                entity_commands.observe(
+                    |_: Trigger<Pointer<Click>>,
+                     mut next_state: ResMut<NextState<MainState>>,
+                     mut credits_ui_tree: Query<&mut Visibility, With<CreditsUiTree>>,
+                     mut ui_opacity: ResMut<TargetUiOpacity>| {
+                        next_state.set(MainState::DimForUi);
+                        *credits_ui_tree.single_mut().unwrap() = Visibility::Visible;
+                        ui_opacity.0 = 1.0;
+                    },
+                );
+            }
+            "rules" => {
+                entity_commands.observe(
+                    |_: Trigger<Pointer<Click>>,
+                     mut next_state: ResMut<NextState<MainState>>,
+                     mut settings_ui_tree: Query<&mut Visibility, With<RulesUiTree>>,
+                     mut ui_opacity: ResMut<TargetUiOpacity>| {
+                        next_state.set(MainState::DimForUi);
+                        *settings_ui_tree.single_mut().unwrap() = Visibility::Visible;
+                        ui_opacity.0 = 1.0;
+                    },
+                );
+            }
+            "settings" => {
+                entity_commands.observe(
+                    |_: Trigger<Pointer<Click>>,
+                     mut next_state: ResMut<NextState<MainState>>,
+                     mut settings_ui_tree: Query<&mut Visibility, With<SettingsUiTree>>,
+                     mut ui_opacity: ResMut<TargetUiOpacity>| {
+                        next_state.set(MainState::DimForUi);
+                        *settings_ui_tree.single_mut().unwrap() = Visibility::Visible;
+                        ui_opacity.0 = 1.0;
+                    },
+                );
+            }
+            "start-game" => {
+                entity_commands.observe(|_: Trigger<Pointer<Click>>, mut next_state: ResMut<NextState<MainState>>| {
+                    next_state.set(MainState::Game);
+                });
+            }
+            x => {
+                warn!("unknown action: {x}");
             }
         }
-        None => {}
     }
 }
 
