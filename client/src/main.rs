@@ -1534,56 +1534,7 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
         Splash,
     ));
 
-    commands.spawn((
-        SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/hopdot.glb"))),
-        MenuElement {
-            for_menu: MenuState::Main,
-            target: None,
-            menu_action: None,
-            side: -1.0,
-        },
-        Transform::from_xyz(-3.5, -0.2, -3.0),
-    ));
-
-    commands.spawn((
-        SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/start-game.glb"))),
-        MenuElement {
-            for_menu: MenuState::Main,
-            target: Some(Transform::from_xyz(-3.5, -0.2, -1.5)),
-            menu_action: Some("start-game"),
-            side: -1.0,
-        },
-    ));
-
-    commands.spawn((
-        SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/settings.glb"))),
-        MenuElement {
-            for_menu: MenuState::Main,
-            target: Some(Transform::from_xyz(-3.5, -0.2, 3.5)),
-            menu_action: Some("settings"),
-            side: -1.0,
-        },
-    ));
-
-    commands.spawn((
-        SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/rules.glb"))),
-        MenuElement {
-            for_menu: MenuState::Main,
-            target: Some(Transform::from_xyz(2.1, -0.2, 2.5)),
-            menu_action: Some("rules"),
-            side: 1.0,
-        },
-    ));
-
-    commands.spawn((
-        SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/credits.glb"))),
-        MenuElement {
-            for_menu: MenuState::Main,
-            target: Some(Transform::from_xyz(2.05, -0.2, 3.5)),
-            menu_action: Some("credits"),
-            side: 1.0,
-        },
-    ));
+    commands.spawn(SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/main-menu.glb"))));
 
     commands.spawn((
         SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/gamepaused.glb"))),

@@ -30,7 +30,7 @@ pub enum MenuState {
 pub struct MenuElement {
     pub for_menu: MenuState,
     pub target: Option<Transform>,
-    pub menu_action: Option<&'static str>,
+    pub menu_action: Option<String>,
     pub side: f32, // -1.0 or 1.0, probably
 }
 
@@ -40,8 +40,8 @@ fn insert_menu_element(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
     if menu_element.target.is_none() {
         menu_element.target = Some(transform);
     }
-    let menu_action = menu_element.menu_action;
-    if let Some(action) = menu_action {
+    let menu_action = menu_element.menu_action.clone();
+    if let Some(action) = menu_action.as_deref() {
         let mut commands = world.commands();
         let mut entity_commands = commands.entity(entity);
         add_hover_observers(&mut entity_commands);
