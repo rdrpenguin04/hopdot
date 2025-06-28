@@ -19,7 +19,7 @@ pub struct GameEndText;
 #[derive(Component)]
 pub struct RulesUiTree;
 
-#[derive(Resource)]
+#[derive(Resource, Deref)]
 struct RulesPageNumber(usize);
 
 pub fn plugin(app: &mut App) {
@@ -57,6 +57,46 @@ fn back_to_main_menu<T: Component>(game_assets: &GameAssets) -> impl Bundle {
                 });
             },
         ),
+    )
+}
+
+fn left_button(game_assets: &GameAssets) -> impl Bundle {
+    (
+        Node {
+            margin: UiRect::horizontal(Val::Px(10.0)),
+            ..default()
+        },
+        Button,
+        BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+        Text::new("<"),
+        TextFont {
+            font: game_assets.mono_font.clone_weak(),
+            font_size: 15.0,
+            ..default()
+        },
+        Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
+        BorderRadius::all(Val::Px(5.0)),
+        AnimateBackgroundColor,
+    )
+}
+
+fn right_button(game_assets: &GameAssets) -> impl Bundle {
+    (
+        Node {
+            margin: UiRect::horizontal(Val::Px(10.0)),
+            ..default()
+        },
+        Button,
+        BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
+        Text::new(">"),
+        TextFont {
+            font: game_assets.mono_font.clone_weak(),
+            font_size: 15.0,
+            ..default()
+        },
+        Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
+        BorderRadius::all(Val::Px(5.0)),
+        AnimateBackgroundColor,
     )
 }
 
@@ -221,21 +261,7 @@ pub fn rules(game_assets: &GameAssets) -> impl Bundle {
                         },
                     ),
                     (
-                        Node {
-                            margin: UiRect::horizontal(Val::Px(10.0)),
-                            ..default()
-                        },
-                        Button,
-                        BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
-                        Text::new("<"),
-                        TextFont {
-                            font: game_assets.mono_font.clone_weak(),
-                            font_size: 15.0,
-                            ..default()
-                        },
-                        Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
-                        BorderRadius::all(Val::Px(5.0)),
-                        AnimateBackgroundColor,
+                        left_button(game_assets),
                         observe(
                             |_: Trigger<Pointer<Click>>,
                              mut rules_page_number: ResMut<RulesPageNumber>,
@@ -260,21 +286,7 @@ pub fn rules(game_assets: &GameAssets) -> impl Bundle {
                         RulesPageNumberText,
                     ),
                     (
-                        Node {
-                            margin: UiRect::horizontal(Val::Px(10.0)),
-                            ..default()
-                        },
-                        Button,
-                        BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
-                        Text::new(">"),
-                        TextFont {
-                            font: game_assets.mono_font.clone_weak(),
-                            font_size: 15.0,
-                            ..default()
-                        },
-                        Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
-                        BorderRadius::all(Val::Px(5.0)),
-                        AnimateBackgroundColor,
+                        right_button(game_assets),
                         observe(
                             |_: Trigger<Pointer<Click>>,
                              mut rules_page_number: ResMut<RulesPageNumber>,
@@ -604,21 +616,7 @@ pub fn settings(game_assets: &GameAssets) -> impl Bundle {
                                 },
                             ),
                             (
-                                Node {
-                                    margin: UiRect::horizontal(Val::Px(10.0)),
-                                    ..default()
-                                },
-                                Button,
-                                BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
-                                Text::new("<"),
-                                TextFont {
-                                    font: game_assets.mono_font.clone_weak(),
-                                    font_size: 15.0,
-                                    ..default()
-                                },
-                                Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
-                                BorderRadius::all(Val::Px(5.0)),
-                                AnimateBackgroundColor,
+                                left_button(game_assets),
                                 observe(
                                     |_: Trigger<Pointer<Click>>, mut config: ResMut<Config>, mut width_text: Query<&mut Text, With<WidthText>>| {
                                         config.grid_size.0 -= 1;
@@ -639,21 +637,7 @@ pub fn settings(game_assets: &GameAssets) -> impl Bundle {
                                 WidthText,
                             ),
                             (
-                                Node {
-                                    margin: UiRect::horizontal(Val::Px(10.0)),
-                                    ..default()
-                                },
-                                Button,
-                                BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
-                                Text::new(">"),
-                                TextFont {
-                                    font: game_assets.mono_font.clone_weak(),
-                                    font_size: 15.0,
-                                    ..default()
-                                },
-                                Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
-                                BorderRadius::all(Val::Px(5.0)),
-                                AnimateBackgroundColor,
+                                right_button(game_assets),
                                 observe(
                                     |_: Trigger<Pointer<Click>>, mut config: ResMut<Config>, mut width_text: Query<&mut Text, With<WidthText>>| {
                                         config.grid_size.0 += 1;
@@ -684,21 +668,7 @@ pub fn settings(game_assets: &GameAssets) -> impl Bundle {
                                 },
                             ),
                             (
-                                Node {
-                                    margin: UiRect::horizontal(Val::Px(10.0)),
-                                    ..default()
-                                },
-                                Button,
-                                BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
-                                Text::new("<"),
-                                TextFont {
-                                    font: game_assets.mono_font.clone_weak(),
-                                    font_size: 15.0,
-                                    ..default()
-                                },
-                                Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
-                                BorderRadius::all(Val::Px(5.0)),
-                                AnimateBackgroundColor,
+                                left_button(game_assets),
                                 observe(
                                     |_: Trigger<Pointer<Click>>, mut config: ResMut<Config>, mut height_text: Query<&mut Text, With<HeightText>>| {
                                         config.grid_size.1 -= 1;
@@ -719,21 +689,7 @@ pub fn settings(game_assets: &GameAssets) -> impl Bundle {
                                 HeightText,
                             ),
                             (
-                                Node {
-                                    margin: UiRect::horizontal(Val::Px(10.0)),
-                                    ..default()
-                                },
-                                Button,
-                                BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
-                                Text::new(">"),
-                                TextFont {
-                                    font: game_assets.mono_font.clone_weak(),
-                                    font_size: 15.0,
-                                    ..default()
-                                },
-                                Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
-                                BorderRadius::all(Val::Px(5.0)),
-                                AnimateBackgroundColor,
+                                right_button(game_assets),
                                 observe(
                                     |_: Trigger<Pointer<Click>>, mut config: ResMut<Config>, mut height_text: Query<&mut Text, With<HeightText>>| {
                                         config.grid_size.1 += 1;
@@ -771,21 +727,7 @@ pub fn settings(game_assets: &GameAssets) -> impl Bundle {
                         },
                         children![
                             (
-                                Node {
-                                    margin: UiRect::horizontal(Val::Px(10.0)),
-                                    ..default()
-                                },
-                                Button,
-                                BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
-                                Text::new("<"),
-                                TextFont {
-                                    font: game_assets.mono_font.clone_weak(),
-                                    font_size: 15.0,
-                                    ..default()
-                                },
-                                Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
-                                BorderRadius::all(Val::Px(5.0)),
-                                AnimateBackgroundColor,
+                                left_button(game_assets),
                                 observe(
                                     |_: Trigger<Pointer<Click>>,
                                      mut flash_intensity: ResMut<FlashIntensity>,
@@ -808,21 +750,7 @@ pub fn settings(game_assets: &GameAssets) -> impl Bundle {
                                 FlashIntensityText,
                             ),
                             (
-                                Node {
-                                    margin: UiRect::horizontal(Val::Px(10.0)),
-                                    ..default()
-                                },
-                                Button,
-                                BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
-                                Text::new(">"),
-                                TextFont {
-                                    font: game_assets.mono_font.clone_weak(),
-                                    font_size: 15.0,
-                                    ..default()
-                                },
-                                Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
-                                BorderRadius::all(Val::Px(5.0)),
-                                AnimateBackgroundColor,
+                                right_button(game_assets),
                                 observe(
                                     |_: Trigger<Pointer<Click>>,
                                      mut flash_intensity: ResMut<FlashIntensity>,
