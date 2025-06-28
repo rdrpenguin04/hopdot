@@ -1,4 +1,4 @@
-//! Code from https://github.com/DylanRJohnston/abiogenesis.
+//! Code from <https://github.com/DylanRJohnston/abiogenesis>.
 //! Used with permission (I asked for a license on the repo, so hopefully this won't be so handwavey in the future).
 
 use bevy::prelude::*;
