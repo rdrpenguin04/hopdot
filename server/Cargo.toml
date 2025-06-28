@@ -3,6 +3,7 @@ name = "hopdot-server"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
+license.workspace = true
 
 [dependencies]
 actix-web = "4.11.0"

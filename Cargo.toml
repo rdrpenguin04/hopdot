@@ -7,6 +7,7 @@ resolver = "3"
 version = "1.0.0"
 edition = "2024"
 authors = ["Ray Redondo (rdredondo@lcdev.xyz)"]
+license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
 # TODO: add any common deps here
