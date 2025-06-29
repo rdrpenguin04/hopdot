@@ -33,3 +33,6 @@ getrandom = { version = "0.3", features = ["wasm_js"] }
 [lints.clippy]
 too_many_arguments = "allow"
 type_complexity = "allow"
+
+[lib]
+crate-type = ["lib", "cdylib"]
