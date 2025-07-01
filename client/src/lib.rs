@@ -148,7 +148,7 @@ pub struct Config {
 }
 
 #[derive(Default, Resource, Reflect)]
-pub struct CellGrid {
+pub struct VisualGrid {
     grid: Vec<Entity>, // would be technically more efficient to use Box<[Entity]>, but oh well
     width: usize,
 }
@@ -169,7 +169,7 @@ impl Default for NeedNewBoard {
 #[require(Transform, Visibility)]
 pub struct GridTray;
 
-impl CellGrid {
+impl VisualGrid {
     pub fn new(width: usize, height: usize) -> Self {
         Self {
             grid: vec![Entity::PLACEHOLDER; width * height],
@@ -195,7 +195,7 @@ impl CellGrid {
     }
 }
 
-impl Index<usize> for CellGrid {
+impl Index<usize> for VisualGrid {
     type Output = [Entity];
 
     fn index(&self, index: usize) -> &[Entity] {
@@ -203,13 +203,13 @@ impl Index<usize> for CellGrid {
     }
 }
 
-impl IndexMut<usize> for CellGrid {
+impl IndexMut<usize> for VisualGrid {
     fn index_mut(&mut self, index: usize) -> &mut [Entity] {
         &mut self.grid[(index * self.width)..((index + 1) * self.width)]
     }
 }
 
-impl<'a> IntoIterator for &'a CellGrid {
+impl<'a> IntoIterator for &'a VisualGrid {
     type Item = &'a [Entity];
 
     type IntoIter = core::slice::ChunksExact<'a, Entity>;
@@ -261,7 +261,7 @@ pub fn main() {
     // }
 
     app.init_resource::<GameAssets>()
-        .init_resource::<CellGrid>()
+        .init_resource::<VisualGrid>()
         .insert_resource(AmbientLight {
             brightness: 1000.0,
             ..default()
@@ -427,7 +427,7 @@ fn fly_in_game(
     mut grid_tray: Query<(Entity, &mut Transform, &mut TargetTransform), (With<GridTray>, Without<Camera3d>)>,
     need_new_board: Res<State<NeedNewBoard>>,
     mut next_need_new_board: ResMut<NextState<NeedNewBoard>>,
-    mut grid: ResMut<CellGrid>,
+    mut grid: ResMut<VisualGrid>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     game_assets: Res<GameAssets>,
     mut next_turn: ResMut<NextState<CurrentTurn>>,
@@ -729,7 +729,7 @@ pub fn scatter_tick(
     current_turn: Res<State<CurrentTurn>>,
     mut next_turn: ResMut<NextState<CurrentTurn>>,
     player_config: Res<Config>,
-    grid: Res<CellGrid>,
+    grid: Res<VisualGrid>,
     mut cells: Query<(&mut DotCell, &DotCellMeta, &mut CellColor, &MeshMaterial3d<StandardMaterial>, &mut Transform)>,
     time: Res<Time>,
     mut materials: ResMut<Assets<StandardMaterial>>,
