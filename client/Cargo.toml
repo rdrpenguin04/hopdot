@@ -16,11 +16,12 @@ log = { version = "*", features = [
     "max_level_debug",
     "release_max_level_warn",
 ] }
-rand = "0.9.1"
+rand.workspace = true
 tracing = { version = "*", features = [
     "max_level_debug",
     "release_max_level_warn",
 ] }
+common.workspace = true
 
 [features]
 default = ["dev_native"]

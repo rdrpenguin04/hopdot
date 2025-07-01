@@ -2062,6 +2062,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "common"
+version = "1.0.0"
+
+[[package]]
 name = "concurrent-queue"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3182,6 +3186,7 @@ dependencies = [
  "bevy_prng",
  "bevy_rand",
  "bevy_skein",
+ "common",
  "getrandom 0.3.3",
  "log",
  "rand 0.9.1",
@@ -3196,6 +3201,7 @@ dependencies = [
  "actix-web-httpauth",
  "actix-ws",
  "anyhow",
+ "common",
  "env_logger",
  "futures-util",
  "jws",
