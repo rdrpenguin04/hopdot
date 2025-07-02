@@ -25,7 +25,7 @@ pub fn tick_ai(
     grid_tray: Query<Entity, With<GridTray>>,
     mut ais: Local<Vec<Box<dyn Ai>>>,
 ) {
-    if ais.len() == 0 {
+    if ais.is_empty() {
         // Init
         ais.push(Box::new(Easiest::default()));
         ais.push(Box::new(Easy::default()));
