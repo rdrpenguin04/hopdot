@@ -22,9 +22,13 @@ getrandom = { git = "https://github.com/benfrankel/getrandom" }
 
 [profile.dev]
 opt-level = 1
+debug = "full"
 
 [profile.dev.package."*"]
 opt-level = 3
+
+[profile.dev.package.common]
+opt-level = 1
 
 [profile.dev.package.wgpu-types]
 debug-assertions = false

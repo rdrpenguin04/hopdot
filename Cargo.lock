@@ -2064,6 +2064,9 @@ dependencies = [
 [[package]]
 name = "common"
 version = "1.0.0"
+dependencies = [
+ "rand 0.9.1",
+]
 
 [[package]]
 name = "concurrent-queue"
