@@ -90,6 +90,7 @@ pub fn tick_ai(
     if let Some((x, y)) = cell {
         if simple_grid[y][x].owner != 0 && simple_grid[y][x].owner != current_player.0 {
             // This is an illegal move. Don't do it.
+            ai.start_move();
             return;
         }
         let entity = grid[y][x];
