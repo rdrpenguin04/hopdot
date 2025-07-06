@@ -3,6 +3,7 @@ pub mod anim;
 pub mod bundle_fn;
 pub mod menu;
 pub mod observe;
+pub mod projection;
 pub mod ui_menu;
 
 use std::{
@@ -27,9 +28,7 @@ use bevy_rand::plugin::EntropyPlugin;
 use bevy_skein::SkeinPlugin;
 
 use crate::{
-    anim::{Bouncing, SmoothingSettings, TargetTransform, TargetUiOpacity},
-    menu::{MenuElement, MenuState},
-    ui_menu::{GameEndText, GameEndUiTree},
+    anim::{Bouncing, SmoothingSettings, TargetTransform, TargetUiOpacity}, menu::{MenuElement, MenuState}, projection::PerspectiveMinAspect, ui_menu::{GameEndText, GameEndUiTree}
 };
 
 #[derive(Resource, Reflect)]
@@ -514,7 +513,7 @@ fn fly_to_menu(
         }
     }
     if let Ok(mut camera_pos) = camera_pos.single_mut() {
-        **camera_pos = Transform::from_xyz(0.0, 16.0, 0.0).looking_at(Vec3::ZERO, Vec3::NEG_Z);
+        **camera_pos = Transform::from_xyz(0.0, 12.0, 0.0).looking_at(Vec3::ZERO, Vec3::NEG_Z);
     }
     if let Ok(mut orbiter) = orbiter.single_mut() {
         orbiter.rotation = Quat::from_axis_angle(Vec3::Y, 0.0);
@@ -686,6 +685,7 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
         .with_children(|commands| {
             commands.spawn((
                 Camera3d::default(),
+                Projection::custom(PerspectiveMinAspect::default()),
                 Camera { hdr: true, ..default() },
                 Transform::from_xyz(0.0, 12.0, 16.0).looking_to(Dir3::NEG_Z, Dir3::Y),
                 Msaa::Off,

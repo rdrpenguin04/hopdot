@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, window::PrimaryWindow};
 use bevy_defer::{AsyncAccess as _, AsyncCommandsExtension as _, AsyncWorld, fetch};
 
 use crate::{
@@ -23,7 +23,23 @@ pub struct RulesUiTree;
 struct RulesPageNumber(usize);
 
 pub fn plugin(app: &mut App) {
-    app.insert_resource(RulesPageNumber(1)).add_systems(Update, update_config_from_buttons);
+    app.insert_resource(RulesPageNumber(1))
+        .add_systems(Update, (update_config_from_buttons, update_ui_scale));
+}
+
+fn update_ui_scale(mut ui_scale: ResMut<UiScale>, windows: Query<&Window, With<PrimaryWindow>>) {
+    // TODO: Cheap hack. Do actual size estimation later.
+    let Ok(window) = windows.single() else {
+        warn!("either we have no window, or we have multiple. either one is bad.");
+        return;
+    };
+    ui_scale.0 = if window.width() > 1000.0 {
+        1.0
+    } else if window.width() > 600.0 {
+        0.75
+    } else {
+        0.55
+    };
 }
 
 fn back_to_main_menu<T: Component>(game_assets: &GameAssets) -> impl Bundle {
