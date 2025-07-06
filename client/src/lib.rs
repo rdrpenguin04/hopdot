@@ -28,7 +28,10 @@ use bevy_rand::plugin::EntropyPlugin;
 use bevy_skein::SkeinPlugin;
 
 use crate::{
-    anim::{Bouncing, SmoothingSettings, TargetTransform, TargetUiOpacity}, menu::{MenuElement, MenuState}, projection::PerspectiveMinAspect, ui_menu::{GameEndText, GameEndUiTree}
+    anim::{Bouncing, SmoothingSettings, TargetTransform, TargetUiOpacity},
+    menu::{MenuElement, MenuState},
+    projection::PerspectiveMinAspect,
+    ui_menu::{GameEndText, GameEndUiTree},
 };
 
 #[derive(Resource, Reflect)]
