@@ -38,7 +38,7 @@ fn update_ui_scale(mut ui_scale: ResMut<UiScale>, windows: Query<&Window, With<P
     } else if window.width() > 600.0 {
         0.75
     } else {
-        0.55
+        0.6
     };
 }
 
