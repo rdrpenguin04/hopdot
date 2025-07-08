@@ -61,6 +61,7 @@ pub enum PlayerKind {
 pub struct Player {
     pub color: Color,
     pub kind: PlayerKind,
+    pub status: PlayerStatus,
     #[bincode(with_serde)]
     pub id: Uuid,
 }
@@ -93,6 +94,13 @@ pub enum ProposalType {
     Draw,
 }
 
+#[derive(Encode, Decode, Copy, Clone, Debug, Hash, PartialEq, Eq)]
+pub enum PlayerStatus {
+    Normal,
+    Elim,
+    Resigned,
+}
+
 #[derive(Encode, Decode, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum GamePacket {
     SHello(Version),
@@ -106,9 +114,10 @@ pub enum GamePacket {
     SUpdateTurn(NonZeroU8),
     CProposal(ProposalType),
     CCancelProposal(ProposalType),
-    SRemoteProposal(ProposalType),
+    SRemoteProposal(NonZeroU8, ProposalType),
     SProposalAccepted(ProposalType),
     SProposalRefused(ProposalType),
+    SPlayerStatus(NonZeroU8, PlayerStatus),
 }
 
 #[derive(Encode, Decode, Clone, Debug, Hash, PartialEq, Eq)]
