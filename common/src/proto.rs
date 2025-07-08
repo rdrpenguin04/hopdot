@@ -105,8 +105,10 @@ pub enum GamePacket {
     SMoveResult(Pos, MoveResult),
     SUpdateTurn(NonZeroU8),
     CProposal(ProposalType),
+    CCancelProposal(ProposalType),
     SRemoteProposal(ProposalType),
     SProposalAccepted(ProposalType),
+    SProposalRefused(ProposalType),
 }
 
 #[derive(Encode, Decode, Clone, Debug, Hash, PartialEq, Eq)]
