@@ -11,7 +11,7 @@ impl Version {
     pub const fn new(major: u16, minor: u16) -> Self {
         assert!(major < (1 << 10));
         assert!(minor < (1 << 6));
-        Self((major << 6) | (minor as u16))
+        Self((major << 6) | minor)
     }
 
     pub const fn into_raw(self) -> u16 {

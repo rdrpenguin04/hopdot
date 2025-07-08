@@ -1,4 +1,4 @@
-use std::num::{NonZero, NonZeroU8};
+use std::num::NonZeroU8;
 
 use bincode::{Decode, Encode};
 use chrono::Utc;
