@@ -6,6 +6,7 @@ use crate::grid::Grid;
 use crate::proto::Player;
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct GameStatus {
     board: Grid,
     player_list: Vec<Player>,
