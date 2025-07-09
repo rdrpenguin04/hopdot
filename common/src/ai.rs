@@ -13,6 +13,14 @@ pub trait Ai: Send + Sync {
     /// Returns `None` if the AI isn't ready yet or `Some((x, y))` if it is. This function is expected to continue returning `Some` for every tick after it first has a result, though the specific cell chosen is allowed to change.
     fn tick(&mut self, grid: &Grid, player: usize, rng: &mut dyn RngCore)
     -> Option<(usize, usize)>;
+
+    fn name(&self) -> &str;
+}
+
+impl<'a> core::fmt::Debug for dyn Ai + 'a {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
 }
 
 #[derive(Default)]
@@ -63,6 +71,10 @@ impl Ai for Easiest {
         } else {
             None
         }
+    }
+
+    fn name(&self) -> &str {
+        "Easiest"
     }
 }
 
@@ -172,6 +184,10 @@ impl Ai for Easy {
             self.0 = self.tick_inner(grid, player, rng);
         }
         self.0
+    }
+
+    fn name(&self) -> &str {
+        "Easy"
     }
 }
 
@@ -307,5 +323,9 @@ impl Ai for Medium {
             self.0 = self.tick_inner(grid, player, rng);
         }
         self.0
+    }
+
+    fn name(&self) -> &str {
+        "Medium"
     }
 }

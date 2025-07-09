@@ -26,7 +26,7 @@ impl Default for GridCell {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Grid {
     grid: Vec<GridCell>,
     width: usize,
