@@ -1,6 +1,9 @@
 use std::num::NonZeroU8;
 
-use bincode::{Decode, Encode};
+use bincode::{
+    Decode, Encode,
+    config::{self, Config},
+};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -130,3 +133,13 @@ pub enum MoveResult {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Timestamp(#[serde(with = "chrono::serde::ts_milliseconds")] pub chrono::DateTime<Utc>);
+
+/// The configuration used for the protocol
+///
+/// The Configuration is:
+/// * Little Endian Byte Order
+/// * Varint Encoding
+/// * A packet contains at most 256 bytes.
+pub const fn bincode_config() -> impl Config {
+    config::standard().with_limit::<256>()
+}
