@@ -42,6 +42,29 @@ fn update_ui_scale(mut ui_scale: ResMut<UiScale>, windows: Query<&Window, With<P
     };
 }
 
+fn button_with_bg(game_assets: &GameAssets, text: impl Into<String>, color: Color) -> impl Bundle {
+    (
+        Node {
+            margin: UiRect::horizontal(Val::Px(5.0)),
+            padding: UiRect::axes(Val::Px(3.0), Val::Px(3.0)),
+            ..default()
+        },
+        Button,
+        AnimateBackgroundColor,
+        BackgroundColor(color),
+        Outline::new(Val::Px(3.0), Val::Px(0.0), Color::WHITE),
+        BorderRadius::all(Val::Px(5.0)),
+        children![(
+            Text::new(text),
+            TextFont {
+                font: game_assets.mono_font.clone_weak(),
+                font_size: 15.0,
+                ..default()
+            },
+        )],
+    )
+}
+
 fn back_to_main_menu<T: Component>(game_assets: &GameAssets) -> impl Bundle {
     (
         Node {
@@ -77,43 +100,11 @@ fn back_to_main_menu<T: Component>(game_assets: &GameAssets) -> impl Bundle {
 }
 
 fn left_button(game_assets: &GameAssets) -> impl Bundle {
-    (
-        Node {
-            margin: UiRect::horizontal(Val::Px(10.0)),
-            ..default()
-        },
-        Button,
-        BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
-        Text::new("<"),
-        TextFont {
-            font: game_assets.mono_font.clone_weak(),
-            font_size: 15.0,
-            ..default()
-        },
-        Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
-        BorderRadius::all(Val::Px(5.0)),
-        AnimateBackgroundColor,
-    )
+    button_with_bg(game_assets, "<", Color::srgb(0.2, 0.2, 0.2))
 }
 
 fn right_button(game_assets: &GameAssets) -> impl Bundle {
-    (
-        Node {
-            margin: UiRect::horizontal(Val::Px(10.0)),
-            ..default()
-        },
-        Button,
-        BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
-        Text::new(">"),
-        TextFont {
-            font: game_assets.mono_font.clone_weak(),
-            font_size: 15.0,
-            ..default()
-        },
-        Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
-        BorderRadius::all(Val::Px(5.0)),
-        AnimateBackgroundColor,
-    )
+    button_with_bg(game_assets, ">", Color::srgb(0.2, 0.2, 0.2))
 }
 
 pub fn game_end(game_assets: &GameAssets) -> impl Bundle {
@@ -457,59 +448,17 @@ pub fn settings(game_assets: &GameAssets) -> impl Bundle {
                                 },
                             ),
                             (
-                                Node {
-                                    margin: UiRect::horizontal(Val::Px(10.0)),
-                                    ..default()
-                                },
-                                Button,
-                                BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
-                                Text::new("Player vs. Player"),
-                                TextFont {
-                                    font: game_assets.mono_font.clone_weak(),
-                                    font_size: 15.0,
-                                    ..default()
-                                },
-                                Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
-                                BorderRadius::all(Val::Px(5.0)),
-                                AnimateBackgroundColor,
+                                button_with_bg(game_assets, "Player vs. Player", Color::srgb(0.2, 0.2, 0.2)),
                                 PlayModeSwitch(0),
                             ),
                             (
-                                Node {
-                                    margin: UiRect::horizontal(Val::Px(10.0)),
-                                    ..default()
-                                },
-                                Button,
-                                BackgroundColor(Color::srgb(0.4, 0.4, 0.4)),
-                                Text::new("Player vs. Bot"),
-                                TextFont {
-                                    font: game_assets.mono_font.clone_weak(),
-                                    font_size: 15.0,
-                                    ..default()
-                                },
-                                Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
-                                BorderRadius::all(Val::Px(5.0)),
-                                AnimateBackgroundColor,
+                                button_with_bg(game_assets, "Player vs. Bot", Color::srgb(0.4, 0.4, 0.4)),
                                 PlayModeSwitch(1),
                             ),
                             (
-                                Node {
-                                    margin: UiRect::horizontal(Val::Px(10.0)),
-                                    ..default()
-                                },
-                                Button,
-                                BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
-                                Text::new("Bot vs. Bot"),
-                                TextFont {
-                                    font: game_assets.mono_font.clone_weak(),
-                                    font_size: 15.0,
-                                    ..default()
-                                },
-                                Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
-                                BorderRadius::all(Val::Px(5.0)),
-                                AnimateBackgroundColor,
+                                button_with_bg(game_assets, "Bot vs. Bot", Color::srgb(0.2, 0.2, 0.2)),
                                 PlayModeSwitch(2),
-                            )
+                            ),
                         ]
                     ),
                     (
@@ -530,57 +479,15 @@ pub fn settings(game_assets: &GameAssets) -> impl Bundle {
                                 },
                             ),
                             (
-                                Node {
-                                    margin: UiRect::horizontal(Val::Px(10.0)),
-                                    ..default()
-                                },
-                                Button,
-                                BackgroundColor(Color::srgb(0.4, 0.4, 0.4)),
-                                Text::new("Easiest"),
-                                TextFont {
-                                    font: game_assets.mono_font.clone_weak(),
-                                    font_size: 15.0,
-                                    ..default()
-                                },
-                                Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
-                                BorderRadius::all(Val::Px(5.0)),
-                                AnimateBackgroundColor,
+                                button_with_bg(game_assets, "Easiest", Color::srgb(0.4, 0.4, 0.4)),
                                 BotLevelSwitch(0),
                             ),
                             (
-                                Node {
-                                    margin: UiRect::horizontal(Val::Px(10.0)),
-                                    ..default()
-                                },
-                                Button,
-                                BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
-                                Text::new("Easy"),
-                                TextFont {
-                                    font: game_assets.mono_font.clone_weak(),
-                                    font_size: 15.0,
-                                    ..default()
-                                },
-                                Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
-                                BorderRadius::all(Val::Px(5.0)),
-                                AnimateBackgroundColor,
+                                button_with_bg(game_assets, "Easy", Color::srgb(0.2, 0.2, 0.2)),
                                 BotLevelSwitch(1),
                             ),
                             (
-                                Node {
-                                    margin: UiRect::horizontal(Val::Px(10.0)),
-                                    ..default()
-                                },
-                                Button,
-                                BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
-                                Text::new("Medium"),
-                                TextFont {
-                                    font: game_assets.mono_font.clone_weak(),
-                                    font_size: 15.0,
-                                    ..default()
-                                },
-                                Outline::new(Val::Px(2.0), Val::Px(5.0), Color::WHITE),
-                                BorderRadius::all(Val::Px(5.0)),
-                                AnimateBackgroundColor,
+                                button_with_bg(game_assets, "Medium", Color::srgb(0.2, 0.2, 0.2)),
                                 BotLevelSwitch(2),
                             ),
                             (
