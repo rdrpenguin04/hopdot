@@ -4,7 +4,7 @@ default-members = ["client"]
 resolver = "3"
 
 [workspace.package]
-version = "1.2.0"
+version = "1.2.1"
 edition = "2024"
 authors = ["Ray Redondo (rdredondo@lcdev.xyz)"]
 license = "MIT OR Apache-2.0"
