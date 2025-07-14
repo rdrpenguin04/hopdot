@@ -12,8 +12,7 @@ pub trait Ai: Send + Sync {
     /// Called once per frame to update the AI's state. Should be limited to roughly 1/60th of a second in time.
     ///
     /// Returns `None` if the AI isn't ready yet or `Some((x, y))` if it is. This function is expected to continue returning `Some` for every tick after it first has a result, though the specific cell chosen is allowed to change.
-    fn tick(&mut self, grid: &Grid, player: usize, rng: &mut dyn RngCore)
-    -> Option<(usize, usize)>;
+    fn tick(&mut self, grid: &Grid, player: u8, rng: &mut dyn RngCore) -> Option<(u8, u8)>;
 
     fn name(&self) -> &str;
 }
@@ -25,25 +24,16 @@ impl<'a> core::fmt::Debug for dyn Ai + 'a {
 }
 
 #[derive(Default)]
-pub struct Easiest(Option<(usize, usize)>);
+pub struct Easiest(Option<(u8, u8)>);
 
-impl Ai for Easiest {
-    fn start_move(&mut self, _: &Grid) {
-        self.0 = None;
-    }
-
-    fn tick(
-        &mut self,
-        grid: &Grid,
-        player: usize,
-        rng: &mut dyn RngCore,
-    ) -> Option<(usize, usize)> {
+impl Easiest {
+    fn tick_inner(&mut self, grid: &Grid, player: u8, rng: &mut dyn RngCore) -> Option<(u8, u8)> {
         let mut new_cells = Vec::new();
         let mut mid_cells = Vec::new();
         let mut full_cells = Vec::new();
         let mut owned_cells = 0;
-        for (y, row) in grid.iter().enumerate() {
-            for (x, cell) in row.iter().enumerate() {
+        for (y, row) in grid.iter().enumerate_u8() {
+            for (x, cell) in row.iter().enumerate_u8() {
                 if cell.owner == 0 {
                     new_cells.push((x, y));
                 } else if cell.owner == player {
@@ -73,6 +63,19 @@ impl Ai for Easiest {
             None
         }
     }
+}
+
+impl Ai for Easiest {
+    fn start_move(&mut self, _: &Grid) {
+        self.0 = None;
+    }
+
+    fn tick(&mut self, grid: &Grid, player: u8, rng: &mut dyn RngCore) -> Option<(u8, u8)> {
+        if self.0.is_none() {
+            self.0 = self.tick_inner(grid, player, rng);
+        }
+        self.0
+    }
 
     fn name(&self) -> &str {
         "Easiest"
@@ -80,15 +83,10 @@ impl Ai for Easiest {
 }
 
 #[derive(Default)]
-pub struct Easy(Option<(usize, usize)>);
+pub struct Easy(Option<(u8, u8)>);
 
 impl Easy {
-    fn tick_inner(
-        &mut self,
-        grid: &Grid,
-        player: usize,
-        rng: &mut dyn RngCore,
-    ) -> Option<(usize, usize)> {
+    fn tick_inner(&mut self, grid: &Grid, player: u8, rng: &mut dyn RngCore) -> Option<(u8, u8)> {
         let mut corner_count = 0;
         let mut viable_corners = Vec::new();
         for y in [0, grid.height() - 1] {
@@ -104,8 +102,8 @@ impl Easy {
             return Some(viable_corners[rng.random_range(0..viable_corners.len())]);
         }
         let mut cascade_origins = Vec::new();
-        for (y, row) in grid.iter().enumerate() {
-            for (x, cell) in row.iter().enumerate() {
+        for (y, row) in grid.iter().enumerate_u8() {
+            for (x, cell) in row.iter().enumerate_u8() {
                 if cell.owner == player && cell.is_full() {
                     cascade_origins.push(((x, y), 0));
                 }
@@ -143,8 +141,8 @@ impl Easy {
             return Some(cascade_origins[rng.random_range(0..cascade_origins.len())]);
         }
         let mut owned_cells = Vec::new();
-        for (y, row) in grid.iter().enumerate() {
-            for (x, cell) in row.iter().enumerate() {
+        for (y, row) in grid.iter().enumerate_u8() {
+            for (x, cell) in row.iter().enumerate_u8() {
                 if cell.owner == player {
                     owned_cells.push((x, y));
                 }
@@ -155,8 +153,8 @@ impl Easy {
             return Some(owned_cells[rng.random_range(0..owned_cells.len())]);
         }
         let mut unowned_cells = Vec::new();
-        for (y, row) in grid.iter().enumerate() {
-            for (x, cell) in row.iter().enumerate() {
+        for (y, row) in grid.iter().enumerate_u8() {
+            for (x, cell) in row.iter().enumerate_u8() {
                 if cell.owner == 0 {
                     unowned_cells.push((x, y));
                 }
@@ -175,12 +173,7 @@ impl Ai for Easy {
         self.0 = None;
     }
 
-    fn tick(
-        &mut self,
-        grid: &Grid,
-        player: usize,
-        rng: &mut dyn RngCore,
-    ) -> Option<(usize, usize)> {
+    fn tick(&mut self, grid: &Grid, player: u8, rng: &mut dyn RngCore) -> Option<(u8, u8)> {
         if self.0.is_none() {
             self.0 = self.tick_inner(grid, player, rng);
         }
@@ -193,15 +186,10 @@ impl Ai for Easy {
 }
 
 #[derive(Default)]
-pub struct Medium(Option<(usize, usize)>);
+pub struct Medium(Option<(u8, u8)>);
 
 impl Medium {
-    fn tick_inner(
-        &mut self,
-        grid: &Grid,
-        player: usize,
-        rng: &mut dyn RngCore,
-    ) -> Option<(usize, usize)> {
+    fn tick_inner(&mut self, grid: &Grid, player: u8, rng: &mut dyn RngCore) -> Option<(u8, u8)> {
         let mut corner_count = 0;
         let mut viable_corners = Vec::new();
         for y in [0, grid.height() - 1] {
@@ -219,8 +207,8 @@ impl Medium {
         let baseline_eval = grid.score_for_player(player);
         let mut evals = Vec::new();
         let mut winning_moves = Vec::new();
-        for (y, row) in grid.iter().enumerate() {
-            for (x, cell) in row.iter().enumerate() {
+        for (y, row) in grid.iter().enumerate_u8() {
+            for (x, cell) in row.iter().enumerate_u8() {
                 if cell.owner == player || cell.owner == 0 {
                     let (new_grid, _) = grid.with_move(x, y, player);
                     if let Some(new_grid) = new_grid {
@@ -314,12 +302,7 @@ impl Ai for Medium {
         self.0 = None;
     }
 
-    fn tick(
-        &mut self,
-        grid: &Grid,
-        player: usize,
-        rng: &mut dyn RngCore,
-    ) -> Option<(usize, usize)> {
+    fn tick(&mut self, grid: &Grid, player: u8, rng: &mut dyn RngCore) -> Option<(u8, u8)> {
         if self.0.is_none() {
             self.0 = self.tick_inner(grid, player, rng);
         }
@@ -335,7 +318,7 @@ use std::fmt::Debug;
 
 pub struct TreeNodeState<T: PartialOrd + Copy> {
     grid: Option<Grid>, // If this is `None`, the game is over.
-    moves: HashMap<(usize, usize), TreeNode<T>>,
+    moves: HashMap<(u8, u8), TreeNode<T>>,
     score: T,
 }
 
@@ -358,13 +341,13 @@ pub enum TreeNode<T: PartialOrd + Copy> {
 #[derive(Default)]
 pub struct TreeState<T: PartialOrd + Copy> {
     root: TreeNode<T>,
-    me: usize,
+    me: u8,
     grid: Option<Grid>,
     // TODO: Optimize. The main way I can think to optimize this is to have a `VecDeque<MoveSegment>`, where `MoveSegment` is this enum:
     // ```rs
     // enum MoveSegment {
     //     Depth(usize),
-    //     Move((usize, usize)),
+    //     Move((u8, u8)),
     // }
     // ```
     // ... and then moves are pushed as a depth, followed by each move that led to the state. This would avoid a lot of heap allocations.
@@ -372,7 +355,7 @@ pub struct TreeState<T: PartialOrd + Copy> {
     // The reason the excessive-heap-allocation route was chosen for now is because it's easier to reason about and less error-prone.
     //
     // When we do switch to this, I'd suggest we use a helper struct to navigate the queue to encapsulate the logic; something like `MoveTreeQueue`.
-    eval_queue: VecDeque<Vec<(usize, usize)>>,
+    eval_queue: VecDeque<Vec<(u8, u8)>>,
 }
 
 impl<T: PartialOrd + Copy + Debug> fmt::Debug for TreeState<T> {
@@ -396,7 +379,7 @@ impl<T: PartialOrd + Copy + Debug> TreeState<T> {
         self.eval_queue = VecDeque::from([vec![]]);
     }
 
-    pub fn set_player(&mut self, me: usize) {
+    pub fn set_player(&mut self, me: u8) {
         self.me = me;
     }
 
@@ -411,7 +394,7 @@ impl<T: PartialOrd + Copy + Debug> TreeState<T> {
     /// * if the current player has not been set with [`Self::set_player`]
     pub fn eval_next(
         &mut self,
-        eval: impl FnOnce(Option<&Grid>, usize, usize) -> T,
+        eval: impl FnOnce(Option<&Grid>, u8, u8) -> T,
         max_depth: usize,
     ) -> EvalStatus {
         let Some(grid) = &self.grid else {
@@ -456,8 +439,8 @@ impl<T: PartialOrd + Copy + Debug> TreeState<T> {
         let score = eval(grid.as_ref(), player, self.me);
         let mut next_moves = HashMap::new();
         if let Some(grid) = &grid {
-            for (y, row) in grid.iter().enumerate() {
-                for (x, cell) in row.iter().enumerate() {
+            for (y, row) in grid.iter().enumerate_u8() {
+                for (x, cell) in row.iter().enumerate_u8() {
                     if cell.owner == 0 || cell.owner == player {
                         next_moves.insert((x, y), TreeNode::Vacant);
                         let mut next_move = moves.clone();
@@ -487,12 +470,7 @@ impl<T: PartialOrd + Copy + Debug> TreeState<T> {
         self.me = 0;
     }
 
-    fn propagate_recursive(
-        node: &mut TreeNode<T>,
-        moves: &[(usize, usize)],
-        player: usize,
-        me: usize,
-    ) {
+    fn propagate_recursive(node: &mut TreeNode<T>, moves: &[(u8, u8)], player: u8, me: u8) {
         let TreeNode::State(node) = node else {
             unreachable!("all nodes up to this point should have a state")
         };
@@ -528,7 +506,7 @@ impl<T: PartialOrd + Copy + Debug> TreeState<T> {
         }
     }
 
-    pub fn iter_moves_and_score(&self) -> impl Iterator<Item = ((usize, usize), T)> {
+    pub fn iter_moves_and_score(&self) -> impl Iterator<Item = ((u8, u8), T)> {
         let TreeNode::State(s) = &self.root else {
             panic!("need at least one evaluation round")
         };
@@ -544,7 +522,7 @@ impl<T: PartialOrd + Copy + Debug> TreeState<T> {
 
 #[derive(Default)]
 pub struct Hard {
-    decision: Option<(usize, usize)>,
+    decision: Option<(u8, u8)>,
     tree_state: TreeState<i32>,
 }
 
@@ -552,9 +530,9 @@ impl Hard {
     fn tick_inner(
         &mut self,
         _: &Grid, // TODO: should this be removed from tick() if it'll stay the same the whole time?
-        player: usize, // TODO: should this be moved to `start_move`?
+        player: u8, // TODO: should this be moved to `start_move`?
         rng: &mut dyn RngCore,
-    ) -> Option<(usize, usize)> {
+    ) -> Option<(u8, u8)> {
         self.tree_state.set_player(player);
 
         let mut total_moves = 0;
@@ -607,12 +585,7 @@ impl Ai for Hard {
         self.tree_state.set_grid(grid.clone());
     }
 
-    fn tick(
-        &mut self,
-        grid: &Grid,
-        player: usize,
-        rng: &mut dyn RngCore,
-    ) -> Option<(usize, usize)> {
+    fn tick(&mut self, grid: &Grid, player: u8, rng: &mut dyn RngCore) -> Option<(u8, u8)> {
         if self.decision.is_none() {
             self.decision = self.tick_inner(grid, player, rng);
         }

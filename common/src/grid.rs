@@ -2,13 +2,16 @@ use core::fmt;
 use std::{
     collections::{HashSet, VecDeque},
     ops::{Index, IndexMut},
+    slice::ChunksExact,
 };
+
+use bytemuck::TransparentWrapper;
 
 #[derive(Clone, Copy, Debug)]
 pub struct GridCell {
-    pub dots: usize,
-    pub owner: usize,
-    pub capacity: usize,
+    pub dots: u8,
+    pub owner: u8,
+    pub capacity: u8,
 }
 
 impl GridCell {
@@ -30,7 +33,7 @@ impl Default for GridCell {
 #[derive(Clone, Debug)]
 pub struct Grid {
     grid: Vec<GridCell>,
-    width: usize,
+    width: u8,
 }
 
 impl fmt::Display for Grid {
@@ -48,16 +51,16 @@ impl fmt::Display for Grid {
 }
 
 impl Grid {
-    pub fn new(width: usize, height: usize) -> Self {
+    pub fn new(width: u8, height: u8) -> Self {
         Self {
-            grid: vec![GridCell::default(); width * height],
+            grid: vec![GridCell::default(); width as usize * height as usize],
             width,
         }
     }
 
     pub fn init_capacity(&mut self) {
-        let width = self.width();
-        let height = self.height();
+        let width = self.width() as usize;
+        let height = self.height() as usize;
         for (y, row) in self.iter_mut().enumerate() {
             let ud_edge = y == 0 || y == height - 1;
             for (x, cell) in row.iter_mut().enumerate() {
@@ -73,24 +76,24 @@ impl Grid {
         }
     }
 
-    pub const fn width(&self) -> usize {
+    pub const fn width(&self) -> u8 {
         self.width
     }
 
-    pub const fn height(&self) -> usize {
-        self.grid.len() / self.width
+    pub const fn height(&self) -> u8 {
+        (self.grid.len() / self.width as usize) as u8
     }
 
-    pub fn iter(&self) -> core::slice::ChunksExact<'_, GridCell> {
-        self.grid.chunks_exact(self.width)
+    pub fn iter(&self) -> GridIter<'_> {
+        GridIter::new(self)
     }
 
     pub fn iter_mut(&mut self) -> core::slice::ChunksExactMut<'_, GridCell> {
-        self.grid.chunks_exact_mut(self.width)
+        self.grid.chunks_exact_mut(self.width as usize)
     }
 
     // If this returns None, the board went into a loop.
-    pub fn with_move(&self, x: usize, y: usize, player: usize) -> (Option<Self>, bool) {
+    pub fn with_move(&self, x: u8, y: u8, player: u8) -> (Option<Self>, bool) {
         let mut result = self.clone();
         result[y][x].dots += 1;
         result[y][x].owner = player;
@@ -135,7 +138,7 @@ impl Grid {
         (Some(result), cascaded)
     }
 
-    pub fn score_for_player(&self, player: usize) -> i32 {
+    pub fn score_for_player(&self, player: u8) -> i32 {
         let mut result = 0;
         for cell in &self.grid {
             if cell.owner == player {
@@ -148,31 +151,141 @@ impl Grid {
     }
 
     // TODO: Add this as a field
-    pub fn player_count(&self) -> usize {
+    pub fn player_count(&self) -> u8 {
         2
     }
 }
 
-impl Index<usize> for Grid {
-    type Output = [GridCell];
+#[allow(clippy::type_complexity)] // TODO: decide if this is worth fixing
+pub struct GridIter<'a>(core::iter::Map<ChunksExact<'a, GridCell>, fn(&[GridCell]) -> &GridRow>);
 
-    fn index(&self, index: usize) -> &[GridCell] {
-        &self.grid[(index * self.width)..((index + 1) * self.width)]
+impl<'a> GridIter<'a> {
+    pub fn new(grid: &'a Grid) -> Self {
+        Self(
+            grid.grid
+                .chunks_exact(grid.width as usize)
+                .map(|x| GridRow::wrap_ref(x)),
+        )
+    }
+
+    pub fn enumerate_u8(self) -> impl Iterator<Item = (u8, &'a GridRow)> {
+        self.0.enumerate().map(|(i, x)| (i as u8, x))
+    }
+}
+
+impl<'a> Iterator for GridIter<'a> {
+    type Item = &'a GridRow;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+}
+
+impl Index<usize> for Grid {
+    type Output = GridRow;
+
+    fn index(&self, index: usize) -> &GridRow {
+        let row = &self.grid[(index * self.width as usize)..((index + 1) * self.width as usize)];
+        GridRow::wrap_ref(row)
+    }
+}
+
+impl Index<u8> for Grid {
+    type Output = GridRow;
+
+    fn index(&self, index: u8) -> &GridRow {
+        &self[index as usize]
     }
 }
 
 impl IndexMut<usize> for Grid {
-    fn index_mut(&mut self, index: usize) -> &mut [GridCell] {
-        &mut self.grid[(index * self.width)..((index + 1) * self.width)]
+    fn index_mut(&mut self, index: usize) -> &mut GridRow {
+        let row =
+            &mut self.grid[(index * self.width as usize)..((index + 1) * self.width as usize)];
+        GridRow::wrap_mut(row)
+    }
+}
+
+impl IndexMut<u8> for Grid {
+    fn index_mut(&mut self, index: u8) -> &mut GridRow {
+        &mut self[index as usize]
     }
 }
 
 impl<'a> IntoIterator for &'a Grid {
-    type Item = &'a [GridCell];
+    type Item = &'a GridRow;
 
-    type IntoIter = core::slice::ChunksExact<'a, GridCell>;
+    type IntoIter = impl Iterator<Item = &'a GridRow>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
+    }
+}
+
+#[derive(TransparentWrapper)]
+#[repr(transparent)]
+pub struct GridRow([GridCell]);
+
+impl GridRow {
+    pub fn iter(&self) -> GridRowIter<'_> {
+        GridRowIter::new(self)
+    }
+}
+
+impl Index<usize> for GridRow {
+    type Output = GridCell;
+
+    fn index(&self, index: usize) -> &GridCell {
+        &self.0[index]
+    }
+}
+
+impl Index<u8> for GridRow {
+    type Output = GridCell;
+
+    fn index(&self, index: u8) -> &GridCell {
+        &self[index as usize]
+    }
+}
+
+impl IndexMut<usize> for GridRow {
+    fn index_mut(&mut self, index: usize) -> &mut GridCell {
+        &mut self.0[index]
+    }
+}
+
+impl IndexMut<u8> for GridRow {
+    fn index_mut(&mut self, index: u8) -> &mut GridCell {
+        &mut self[index as usize]
+    }
+}
+
+impl<'a> IntoIterator for &'a GridRow {
+    type Item = &'a GridCell;
+
+    type IntoIter = impl Iterator<Item = &'a GridCell>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+pub struct GridRowIter<'a>(core::slice::Iter<'a, GridCell>);
+
+impl<'a> GridRowIter<'a> {
+    pub fn new(row: &'a GridRow) -> Self {
+        Self(row.0.iter())
+    }
+
+    pub fn enumerate_u8(self) -> impl Iterator<Item = (u8, &'a GridCell)> {
+        self.0.enumerate().map(|(i, x)| (i as u8, x))
+    }
+}
+
+impl<'a> Iterator for GridRowIter<'a> {
+    type Item = &'a GridCell;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
     }
 }

@@ -43,23 +43,15 @@ pub fn tick_ai(
     };
     let ai = &mut ais[level];
 
-    let mut simple_grid = Grid::new(grid.width(), grid.height());
+    let mut simple_grid = Grid::new(grid.width() as u8, grid.height() as u8);
     for (y, row) in grid.iter().enumerate() {
         for (x, &cell) in row.iter().enumerate() {
             let (cell, cell_color, _) = cells.get(cell).unwrap();
-            simple_grid[y][x].dots = cell.dots.len();
-            simple_grid[y][x].owner = cell_color.player;
-            let x_border = x == 0 || x == grid.width() - 1;
-            let y_border = y == 0 || y == grid.height() - 1;
-            simple_grid[y][x].capacity = if x_border && y_border {
-                2
-            } else if x_border || y_border {
-                3
-            } else {
-                4
-            };
+            simple_grid[y][x].dots = cell.dots.len() as u8;
+            simple_grid[y][x].owner = cell_color.player as u8;
         }
     }
+    simple_grid.init_capacity();
     if state.is_changed() {
         timer.set_mode(TimerMode::Once);
         timer.set_duration(Duration::from_secs_f32(0.75));
@@ -71,7 +63,7 @@ pub fn tick_ai(
     let mut can_move = false;
     'top: for row in &simple_grid {
         for cell in row {
-            if cell.owner == 0 || cell.owner == current_player.0 {
+            if cell.owner == 0 || cell.owner == current_player.0 as u8 {
                 can_move = true;
                 break 'top;
             }
@@ -81,7 +73,7 @@ pub fn tick_ai(
         next_state.set(GameOperation::Animating); // We lost. Bail.
         return;
     }
-    let cell = ai.tick(&simple_grid, current_player.0, &mut rng);
+    let cell = ai.tick(&simple_grid, current_player.0 as u8, &mut rng);
 
     timer.tick(time.delta());
     if !timer.finished() {
@@ -89,12 +81,12 @@ pub fn tick_ai(
     }
 
     if let Some((x, y)) = cell {
-        if simple_grid[y][x].owner != 0 && simple_grid[y][x].owner != current_player.0 {
+        if simple_grid[y][x].owner != 0 && simple_grid[y][x].owner != current_player.0 as u8 {
             // This is an illegal move. Don't do it.
             ai.start_move(&simple_grid);
             return;
         }
-        let entity = grid[y][x];
+        let entity = grid[y as usize][x as usize];
         let (
             _,
             mut color,

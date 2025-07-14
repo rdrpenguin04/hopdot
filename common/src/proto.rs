@@ -39,8 +39,8 @@ impl CellState {
             panic!("Ok, way too many players in this crowded game");
         }
 
-        let owner = cell.owner as u8;
-        let count = (cell.dots as u8) - 1;
+        let owner = cell.owner;
+        let count = (cell.dots) - 1;
 
         Self((owner << 5) | count)
     }
