@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use bevy_prng::WyRand;
 use bevy_rand::global::GlobalEntropy;
 use common::{
-    ai::{Ai, Easiest, Easy, Medium},
+    ai::{Ai, Easiest, Easy, Hard, Medium},
     grid::Grid,
 };
 
@@ -30,6 +30,7 @@ pub fn tick_ai(
         ais.push(Box::new(Easiest::default()));
         ais.push(Box::new(Easy::default()));
         ais.push(Box::new(Medium::default()));
+        ais.push(Box::new(Hard::default()));
     }
 
     if current_player.0 == 0 || *state != GameOperation::Bot {
@@ -42,12 +43,6 @@ pub fn tick_ai(
     };
     let ai = &mut ais[level];
 
-    if state.is_changed() {
-        timer.set_mode(TimerMode::Once);
-        timer.set_duration(Duration::from_secs_f32(0.75));
-        timer.reset();
-        ai.start_move();
-    }
     let mut simple_grid = Grid::new(grid.width(), grid.height());
     for (y, row) in grid.iter().enumerate() {
         for (x, &cell) in row.iter().enumerate() {
@@ -64,6 +59,12 @@ pub fn tick_ai(
                 4
             };
         }
+    }
+    if state.is_changed() {
+        timer.set_mode(TimerMode::Once);
+        timer.set_duration(Duration::from_secs_f32(0.75));
+        timer.reset();
+        ai.start_move(&simple_grid);
     }
 
     // Sanity check to make sure there's a legal move for us
@@ -90,7 +91,7 @@ pub fn tick_ai(
     if let Some((x, y)) = cell {
         if simple_grid[y][x].owner != 0 && simple_grid[y][x].owner != current_player.0 {
             // This is an illegal move. Don't do it.
-            ai.start_move();
+            ai.start_move(&simple_grid);
             return;
         }
         let entity = grid[y][x];

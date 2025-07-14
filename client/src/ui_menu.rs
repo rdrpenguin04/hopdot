@@ -472,12 +472,13 @@ pub fn settings(game_assets: &GameAssets) -> impl Bundle {
                             (button_with_bg(game_assets, "Easiest", Color::srgb(0.4, 0.4, 0.4)), BotLevelSwitch(0)),
                             (button_with_bg(game_assets, "Easy", Color::srgb(0.2, 0.2, 0.2)), BotLevelSwitch(1)),
                             (button_with_bg(game_assets, "Medium", Color::srgb(0.2, 0.2, 0.2)), BotLevelSwitch(2)),
+                            (button_with_bg(game_assets, "Hard", Color::srgb(0.2, 0.2, 0.2)), BotLevelSwitch(3)),
                             (
                                 Node {
                                     width: Val::Px(100.0),
                                     ..default()
                                 },
-                                Text::new("more levels coming soon"),
+                                Text::new("last level coming soon"),
                                 TextFont {
                                     font: game_assets.mono_font.clone_weak(),
                                     font_size: 8.0,

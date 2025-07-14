@@ -1,4 +1,5 @@
-use std::collections::{HashSet, VecDeque};
+use core::fmt;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use rand::{Rng, RngCore};
 
@@ -6,7 +7,7 @@ use crate::grid::Grid;
 
 pub trait Ai: Send + Sync {
     /// Called at the start of a new move's analysis time
-    fn start_move(&mut self);
+    fn start_move(&mut self, grid: &Grid);
 
     /// Called once per frame to update the AI's state. Should be limited to roughly 1/60th of a second in time.
     ///
@@ -27,7 +28,7 @@ impl<'a> core::fmt::Debug for dyn Ai + 'a {
 pub struct Easiest(Option<(usize, usize)>);
 
 impl Ai for Easiest {
-    fn start_move(&mut self) {
+    fn start_move(&mut self, _: &Grid) {
         self.0 = None;
     }
 
@@ -170,7 +171,7 @@ impl Easy {
 }
 
 impl Ai for Easy {
-    fn start_move(&mut self) {
+    fn start_move(&mut self, _: &Grid) {
         self.0 = None;
     }
 
@@ -221,7 +222,7 @@ impl Medium {
         for (y, row) in grid.iter().enumerate() {
             for (x, cell) in row.iter().enumerate() {
                 if cell.owner == player || cell.owner == 0 {
-                    let new_grid = grid.with_move(x, y, player);
+                    let (new_grid, _) = grid.with_move(x, y, player);
                     if let Some(new_grid) = new_grid {
                         evals.push(((x, y), new_grid.score_for_player(player)));
                     } else {
@@ -309,7 +310,7 @@ impl Medium {
 }
 
 impl Ai for Medium {
-    fn start_move(&mut self) {
+    fn start_move(&mut self, _: &Grid) {
         self.0 = None;
     }
 
@@ -327,5 +328,352 @@ impl Ai for Medium {
 
     fn name(&self) -> &str {
         "Medium"
+    }
+}
+
+use std::fmt::Debug;
+
+pub struct TreeNodeState<T: PartialOrd + Copy> {
+    grid: Option<Grid>, // If this is `None`, the game is over.
+    moves: HashMap<(usize, usize), TreeNode<T>>,
+    score: T,
+}
+
+impl<T: PartialOrd + Copy + Debug> fmt::Debug for TreeNodeState<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TreeNodeState")
+            .field("moves", &self.moves)
+            .field("score", &self.score)
+            .finish()
+    }
+}
+
+#[derive(Default, Debug)]
+pub enum TreeNode<T: PartialOrd + Copy> {
+    #[default]
+    Vacant,
+    State(TreeNodeState<T>),
+}
+
+#[derive(Default)]
+pub struct TreeState<T: PartialOrd + Copy> {
+    root: TreeNode<T>,
+    me: usize,
+    grid: Option<Grid>,
+    // TODO: Optimize. The main way I can think to optimize this is to have a `VecDeque<MoveSegment>`, where `MoveSegment` is this enum:
+    // ```rs
+    // enum MoveSegment {
+    //     Depth(usize),
+    //     Move((usize, usize)),
+    // }
+    // ```
+    // ... and then moves are pushed as a depth, followed by each move that led to the state. This would avoid a lot of heap allocations.
+    //
+    // The reason the excessive-heap-allocation route was chosen for now is because it's easier to reason about and less error-prone.
+    //
+    // When we do switch to this, I'd suggest we use a helper struct to navigate the queue to encapsulate the logic; something like `MoveTreeQueue`.
+    eval_queue: VecDeque<Vec<(usize, usize)>>,
+}
+
+impl<T: PartialOrd + Copy + Debug> fmt::Debug for TreeState<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TreeState")
+            .field("root", &self.root)
+            .field("me", &self.me)
+            .finish()
+    }
+}
+
+pub enum EvalStatus {
+    Done,
+    Cascaded,
+    Uneventful,
+}
+
+impl<T: PartialOrd + Copy + Debug> TreeState<T> {
+    pub fn set_grid(&mut self, grid: Grid) {
+        self.grid = Some(grid);
+        self.eval_queue = VecDeque::from([vec![]]);
+    }
+
+    pub fn set_player(&mut self, me: usize) {
+        self.me = me;
+    }
+
+    /// The evaluator funtion takes three parameters:
+    /// * the current grid to evaluate (or None if the player won)
+    /// * the player whose turn it currently is
+    /// * the player whose score we care about (corresponds to the player set by [`Self::set_player`])
+    ///
+    /// # Panics
+    /// This function may panic if the state has not been initialized properly, such as:
+    /// * if the active grid has not been set with [`Self::set_grid`]
+    /// * if the current player has not been set with [`Self::set_player`]
+    pub fn eval_next(
+        &mut self,
+        eval: impl FnOnce(Option<&Grid>, usize, usize) -> T,
+        max_depth: usize,
+    ) -> EvalStatus {
+        let Some(grid) = &self.grid else {
+            panic!("call `set_grid` before `eval_next`")
+        };
+        if self.me == 0 {
+            panic!("call `set_player` before `eval_next`");
+        }
+
+        let Some(moves) = self.eval_queue.pop_front() else {
+            return EvalStatus::Done; // Out of legal moves
+        };
+        if max_depth > 0 && moves.len() > max_depth {
+            return EvalStatus::Done; // Hit depth limit
+        }
+        let mut cur_grid = Some(grid);
+        let player_count = grid.player_count();
+        let mut cur_player = self.me;
+        let mut node = &mut self.root;
+
+        let (grid, player, cascade) = if moves.is_empty() {
+            (cur_grid.cloned(), cur_player, false)
+        } else {
+            let mut moves_iter = moves.iter().copied().peekable();
+            loop {
+                let m = moves_iter.next().unwrap();
+                let TreeNode::State(node_inner) = node else {
+                    unreachable!()
+                };
+                cur_grid = node_inner.grid.as_ref();
+                let grid = cur_grid.unwrap();
+                node = node_inner.moves.get_mut(&m).unwrap();
+                if moves_iter.peek().is_some() {
+                    cur_player = cur_player % player_count + 1;
+                } else {
+                    let (grid, cascade) = grid.with_move(m.0, m.1, cur_player);
+                    break (grid, cur_player % player_count + 1, cascade);
+                }
+            }
+        };
+
+        let score = eval(grid.as_ref(), player, self.me);
+        let mut next_moves = HashMap::new();
+        if let Some(grid) = &grid {
+            for (y, row) in grid.iter().enumerate() {
+                for (x, cell) in row.iter().enumerate() {
+                    if cell.owner == 0 || cell.owner == player {
+                        next_moves.insert((x, y), TreeNode::Vacant);
+                        let mut next_move = moves.clone();
+                        next_move.push((x, y));
+                        self.eval_queue.push_back(next_move);
+                    }
+                }
+            }
+        }
+        *node = TreeNode::State(TreeNodeState {
+            grid,
+            moves: next_moves,
+            score,
+        });
+
+        Self::propagate_recursive(&mut self.root, &moves, self.me, self.me);
+
+        if cascade {
+            EvalStatus::Cascaded
+        } else {
+            EvalStatus::Uneventful
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.root = TreeNode::Vacant;
+        self.me = 0;
+    }
+
+    fn propagate_recursive(
+        node: &mut TreeNode<T>,
+        moves: &[(usize, usize)],
+        player: usize,
+        me: usize,
+    ) {
+        let TreeNode::State(node) = node else {
+            unreachable!("all nodes up to this point should have a state")
+        };
+        let Some((m, rest)) = moves.split_first() else {
+            return;
+        };
+        if !rest.is_empty() {
+            Self::propagate_recursive(
+                node.moves.get_mut(m).unwrap(),
+                rest,
+                player % node.grid.as_ref().unwrap().player_count() + 1,
+                me,
+            );
+        }
+        if !node.moves.is_empty() {
+            let mut new_score = None;
+            for node in node.moves.values() {
+                if let TreeNode::State(s) = node {
+                    if let Some(new_score) = &mut new_score {
+                        if (player == me && s.score > *new_score)
+                            || (player != me && s.score < *new_score)
+                        {
+                            *new_score = s.score;
+                        }
+                    } else {
+                        new_score = Some(s.score);
+                    }
+                }
+            }
+            if let Some(new_score) = new_score {
+                node.score = new_score;
+            }
+        }
+    }
+
+    pub fn iter_moves_and_score(&self) -> impl Iterator<Item = ((usize, usize), T)> {
+        let TreeNode::State(s) = &self.root else {
+            panic!("need at least one evaluation round")
+        };
+        s.moves.iter().filter_map(|(m, n)| {
+            if let TreeNode::State(n) = n {
+                Some((*m, n.score))
+            } else {
+                None
+            }
+        })
+    }
+}
+
+#[derive(Default)]
+pub struct Hard {
+    decision: Option<(usize, usize)>,
+    tree_state: TreeState<i32>,
+}
+
+impl Hard {
+    fn tick_inner(
+        &mut self,
+        _: &Grid, // TODO: should this be removed from tick() if it'll stay the same the whole time?
+        player: usize, // TODO: should this be moved to `start_move`?
+        rng: &mut dyn RngCore,
+    ) -> Option<(usize, usize)> {
+        self.tree_state.set_player(player);
+
+        let mut total_moves = 0;
+        let mut total_cascades = 0;
+        while total_moves < 3000 && total_cascades < 200 {
+            match self.tree_state.eval_next(
+                |grid, cur_turn, me| {
+                    if let Some(grid) = grid {
+                        grid.score_for_player(me)
+                    } else if cur_turn != me { // FIXME: I think my logic is wrong somewhere in the tree logic, because this doesn't feel right, but it makes the AI work
+                        i32::MAX
+                    } else {
+                        i32::MIN
+                    }
+                },
+                3,
+            ) {
+                EvalStatus::Cascaded => {
+                    total_cascades += 1;
+                }
+                EvalStatus::Uneventful => {}
+                EvalStatus::Done => {
+                    // figure out which move to return
+                    let mut best_moves = Vec::new();
+                    let mut best_score = i32::MIN;
+                    for (m, score) in self.tree_state.iter_moves_and_score() {
+                        if score >= best_score {
+                            if score > best_score {
+                                best_moves.clear();
+                                best_score = score;
+                            }
+                            best_moves.push(m);
+                        }
+                    }
+                    return Some(best_moves[rng.random_range(0..best_moves.len())]);
+                }
+            }
+            total_moves += 1;
+        }
+
+        None
+    }
+}
+
+impl Ai for Hard {
+    fn start_move(&mut self, grid: &Grid) {
+        self.decision = None;
+        self.tree_state.clear();
+        self.tree_state.set_grid(grid.clone());
+    }
+
+    fn tick(
+        &mut self,
+        grid: &Grid,
+        player: usize,
+        rng: &mut dyn RngCore,
+    ) -> Option<(usize, usize)> {
+        if self.decision.is_none() {
+            self.decision = self.tick_inner(grid, player, rng);
+        }
+        self.decision
+    }
+
+    fn name(&self) -> &str {
+        "Hard"
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use rand::rand_core;
+
+    use super::*;
+
+    struct DeterministicRng<const N: usize> {
+        data: [u32; N],
+        i: usize,
+    }
+
+    impl<const N: usize> DeterministicRng<N> {
+        pub fn new(data: [u32; N]) -> Self {
+            Self { data, i: 0 }
+        }
+    }
+
+    impl<const N: usize> RngCore for DeterministicRng<N> {
+        fn next_u32(&mut self) -> u32 {
+            let result = self.data[self.i];
+            self.i += 1;
+            if self.i >= self.data.len() {
+                self.i = 0;
+            }
+            result
+        }
+
+        fn next_u64(&mut self) -> u64 {
+            ((self.next_u32() as u64) << 32) + self.next_u32() as u64
+        }
+
+        fn fill_bytes(&mut self, dst: &mut [u8]) {
+            rand_core::impls::fill_bytes_via_next(self, dst);
+        }
+    }
+
+    #[test]
+    fn basic_hard_test() {
+        // This is a "don't be dumb" test for the Hard AI. It exists because the Hard AI was, in fact, dumb.
+        let mut ai = Hard::default();
+        // On a 2x2 board, the only correct move for player 2 is the opposite corner as player 1.
+        // As the Hard AI is supposed to have lookahead, this shouldn't be difficult.
+        for y in [0, 1] {
+            for x in [0, 1] {
+                let mut grid = Grid::new(2, 2);
+                grid.init_capacity();
+                let grid = grid.with_move(x, y, 1).0.unwrap();
+                ai.start_move(&grid);
+                let result = ai.tick_inner(&grid, 2, &mut DeterministicRng::new([0]));
+                assert_eq!(result, Some((1 - x, 1 - y)));
+            }
+        }
     }
 }
