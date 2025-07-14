@@ -564,7 +564,8 @@ impl Hard {
                 |grid, cur_turn, me| {
                     if let Some(grid) = grid {
                         grid.score_for_player(me)
-                    } else if cur_turn != me { // FIXME: I think my logic is wrong somewhere in the tree logic, because this doesn't feel right, but it makes the AI work
+                    } else if cur_turn != me {
+                        // FIXME: I think my logic is wrong somewhere in the tree logic, because this doesn't feel right, but it makes the AI work
                         i32::MAX
                     } else {
                         i32::MIN
