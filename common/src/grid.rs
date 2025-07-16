@@ -1,6 +1,7 @@
 use core::fmt;
 use std::{
-    collections::{HashSet, VecDeque},
+    cell::RefCell,
+    collections::VecDeque,
     ops::{Index, IndexMut},
     slice::ChunksExact,
 };
@@ -50,6 +51,10 @@ impl fmt::Display for Grid {
     }
 }
 
+thread_local! {
+    pub static VISITED_BUF: RefCell<Vec<bool>> = const { RefCell::new(Vec::new()) };
+}
+
 impl Grid {
     pub fn new(width: u8, height: u8) -> Self {
         Self {
@@ -94,48 +99,58 @@ impl Grid {
 
     // If this returns None, the board went into a loop.
     pub fn with_move(&self, x: u8, y: u8, player: u8) -> (Option<Self>, bool) {
-        let mut result = self.clone();
-        result[y][x].dots += 1;
-        result[y][x].owner = player;
-
-        let mut visited = HashSet::new();
-        let mut visited_count = 0;
-        let mut cascade_queue = VecDeque::from([(x, y)]);
-        let mut cascaded = false;
-
-        while let Some((x, y)) = cascade_queue.pop_front() {
-            // We've hit every square on the board. The game is over.
-            if visited_count == result.width() * result.height() {
-                return (None, true);
+        VISITED_BUF.with_borrow_mut(|visited| {
+            if visited.len() < self.grid.len() {
+                visited.extend(core::iter::repeat_n(false, self.grid.len() - visited.len()));
             }
-            if visited.insert((x, y)) {
-                visited_count += 1;
+            for i in 0..self.grid.len() {
+                visited[i] = false;
             }
+            let mut result = self.clone();
+            result[y][x].dots += 1;
             result[y][x].owner = player;
-            if result[y][x].dots > result[y][x].capacity {
-                cascaded = true;
-                result[y][x].dots -= result[y][x].capacity;
 
-                if x > 0 {
-                    result[y][x - 1].dots += 1;
-                    cascade_queue.push_back((x - 1, y));
+            let mut visited_count = 0;
+            let mut cascade_queue = VecDeque::from([(x, y)]);
+            let mut cascaded = false;
+
+            while let Some((x, y)) = cascade_queue.pop_front() {
+                // We've hit every square on the board. The game is over.
+                if visited_count == result.width() * result.height() {
+                    return (None, true);
                 }
-                if y > 0 {
-                    result[y - 1][x].dots += 1;
-                    cascade_queue.push_back((x, y - 1));
+                let idx = y as usize * self.width as usize + x as usize;
+                if !visited[idx] {
+                    visited_count += 1;
                 }
-                if x < result.width() - 1 {
-                    result[y][x + 1].dots += 1;
-                    cascade_queue.push_back((x + 1, y));
-                }
-                if y < result.height() - 1 {
-                    result[y + 1][x].dots += 1;
-                    cascade_queue.push_back((x, y + 1));
+                visited[idx] = true;
+                // TODO: maybe replacing these with result.grid[idx] (and modifications) would be faster? Needs analysis
+                result[y][x].owner = player;
+                if result[y][x].dots > result[y][x].capacity {
+                    cascaded = true;
+                    result[y][x].dots -= result[y][x].capacity;
+
+                    if x > 0 {
+                        result[y][x - 1].dots += 1;
+                        cascade_queue.push_back((x - 1, y));
+                    }
+                    if y > 0 {
+                        result[y - 1][x].dots += 1;
+                        cascade_queue.push_back((x, y - 1));
+                    }
+                    if x < result.width() - 1 {
+                        result[y][x + 1].dots += 1;
+                        cascade_queue.push_back((x + 1, y));
+                    }
+                    if y < result.height() - 1 {
+                        result[y + 1][x].dots += 1;
+                        cascade_queue.push_back((x, y + 1));
+                    }
                 }
             }
-        }
 
-        (Some(result), cascaded)
+            (Some(result), cascaded)
+        })
     }
 
     pub fn score_for_player(&self, player: u8) -> i32 {

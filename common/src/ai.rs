@@ -1,6 +1,7 @@
 use core::fmt;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::VecDeque;
 
+use ahash::{HashMap, HashMapExt as _, HashSet, HashSetExt as _};
 use rand::{Rng, RngCore};
 
 use crate::grid::Grid;
@@ -338,24 +339,82 @@ pub enum TreeNode<T: PartialOrd + Copy> {
     State(TreeNodeState<T>),
 }
 
+#[derive(Clone, Copy)]
+struct MoveSegment((u8, u8));
+
+impl MoveSegment {
+    const fn from_depth(depth: u8) -> Self {
+        Self((depth, 0xFF))
+    }
+
+    const fn from_move(m: (u8, u8)) -> Self {
+        Self(m)
+    }
+
+    const fn as_depth(self) -> Option<u8> {
+        if self.0.1 == 255 {
+            Some(self.0.0)
+        } else {
+            None
+        }
+    }
+
+    const fn as_move(self) -> Option<(u8, u8)> {
+        if self.0.1 == 255 {
+            None
+        } else {
+            Some(self.0)
+        }
+    }
+}
+
 #[derive(Default)]
+pub struct MoveQueue(VecDeque<MoveSegment>);
+
+impl MoveQueue {
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+
+    pub fn push(&mut self, m: &[(u8, u8)]) {
+        assert!(m.len() < 256, "analysis depth above 255 is not supported");
+        self.0.push_back(MoveSegment::from_depth(m.len() as u8));
+        self.0.extend(m.iter().map(|x| MoveSegment::from_move(*x)));
+    }
+
+    pub fn push_suffixed(&mut self, m: &[(u8, u8)], next: (u8, u8)) {
+        assert!(m.len() < 255, "analysis depth above 255 is not supported");
+        self.0.push_back(MoveSegment::from_depth(m.len() as u8 + 1));
+        self.0.extend(m.iter().map(|x| MoveSegment::from_move(*x)));
+        self.0.push_back(MoveSegment::from_move(next));
+    }
+
+    pub fn pop(&mut self) -> Option<impl ExactSizeIterator<Item = (u8, u8)>> {
+        let depth = self.0.pop_front()?;
+        let Some(depth) = depth.as_depth() else {
+            panic!("queue in invalid state")
+        };
+        Some(self.0.drain(0..(depth as usize)).map(|x| {
+            let Some(m) = x.as_move() else {
+                panic!("queue in invalid state")
+            };
+            m
+        }))
+    }
+}
+
+pub enum EvalStatus {
+    Done,
+    Cascaded,
+    Uneventful,
+}
+
 pub struct TreeState<T: PartialOrd + Copy> {
     root: TreeNode<T>,
     me: u8,
     grid: Option<Grid>,
-    // TODO: Optimize. The main way I can think to optimize this is to have a `VecDeque<MoveSegment>`, where `MoveSegment` is this enum:
-    // ```rs
-    // enum MoveSegment {
-    //     Depth(usize),
-    //     Move((u8, u8)),
-    // }
-    // ```
-    // ... and then moves are pushed as a depth, followed by each move that led to the state. This would avoid a lot of heap allocations.
-    //
-    // The reason the excessive-heap-allocation route was chosen for now is because it's easier to reason about and less error-prone.
-    //
-    // When we do switch to this, I'd suggest we use a helper struct to navigate the queue to encapsulate the logic; something like `MoveTreeQueue`.
-    eval_queue: VecDeque<Vec<(u8, u8)>>,
+    eval_queue: MoveQueue,
+    moves_buf: Vec<(u8, u8)>,
 }
 
 impl<T: PartialOrd + Copy + Debug> fmt::Debug for TreeState<T> {
@@ -367,16 +426,27 @@ impl<T: PartialOrd + Copy + Debug> fmt::Debug for TreeState<T> {
     }
 }
 
-pub enum EvalStatus {
-    Done,
-    Cascaded,
-    Uneventful,
+impl <T: PartialOrd + Copy + Debug> Default for TreeState<T> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<T: PartialOrd + Copy + Debug> TreeState<T> {
+    pub fn new() -> Self {
+        Self {
+            root: TreeNode::Vacant,
+            me: 0,
+            grid: None,
+            eval_queue: MoveQueue::default(),
+            moves_buf: Vec::with_capacity(32), // Some extra buffer
+        }
+    }
+
     pub fn set_grid(&mut self, grid: Grid) {
         self.grid = Some(grid);
-        self.eval_queue = VecDeque::from([vec![]]);
+        self.eval_queue.clear();
+        self.eval_queue.push(&[]);
     }
 
     pub fn set_player(&mut self, me: u8) {
@@ -404,10 +474,12 @@ impl<T: PartialOrd + Copy + Debug> TreeState<T> {
             panic!("call `set_player` before `eval_next`");
         }
 
-        let Some(moves) = self.eval_queue.pop_front() else {
+        let Some(moves) = self.eval_queue.pop() else {
             return EvalStatus::Done; // Out of legal moves
         };
-        if max_depth > 0 && moves.len() > max_depth {
+        self.moves_buf.clear();
+        self.moves_buf.extend(moves);
+        if max_depth > 0 && self.moves_buf.len() > max_depth {
             return EvalStatus::Done; // Hit depth limit
         }
         let mut cur_grid = Some(grid);
@@ -415,10 +487,10 @@ impl<T: PartialOrd + Copy + Debug> TreeState<T> {
         let mut cur_player = self.me;
         let mut node = &mut self.root;
 
-        let (grid, player, cascade) = if moves.is_empty() {
+        let (grid, player, cascade) = if self.moves_buf.is_empty() {
             (cur_grid.cloned(), cur_player, false)
         } else {
-            let mut moves_iter = moves.iter().copied().peekable();
+            let mut moves_iter = self.moves_buf.iter().copied().peekable();
             loop {
                 let m = moves_iter.next().unwrap();
                 let TreeNode::State(node_inner) = node else {
@@ -426,7 +498,7 @@ impl<T: PartialOrd + Copy + Debug> TreeState<T> {
                 };
                 cur_grid = node_inner.grid.as_ref();
                 let grid = cur_grid.unwrap();
-                node = node_inner.moves.get_mut(&m).unwrap();
+                node = node_inner.moves.entry(m).or_insert(TreeNode::Vacant);
                 if moves_iter.peek().is_some() {
                     cur_player = cur_player % player_count + 1;
                 } else {
@@ -437,26 +509,24 @@ impl<T: PartialOrd + Copy + Debug> TreeState<T> {
         };
 
         let score = eval(grid.as_ref(), player, self.me);
-        let mut next_moves = HashMap::new();
+        let mut num_moves = 0;
         if let Some(grid) = &grid {
             for (y, row) in grid.iter().enumerate_u8() {
                 for (x, cell) in row.iter().enumerate_u8() {
                     if cell.owner == 0 || cell.owner == player {
-                        next_moves.insert((x, y), TreeNode::Vacant);
-                        let mut next_move = moves.clone();
-                        next_move.push((x, y));
-                        self.eval_queue.push_back(next_move);
+                        num_moves += 1;
+                        self.eval_queue.push_suffixed(&self.moves_buf, (x, y));
                     }
                 }
             }
         }
         *node = TreeNode::State(TreeNodeState {
             grid,
-            moves: next_moves,
+            moves: HashMap::with_capacity(num_moves), // populated on explore
             score,
         });
 
-        Self::propagate_recursive(&mut self.root, &moves, self.me, self.me);
+        Self::propagate_recursive(&mut self.root, &self.moves_buf, self.me, self.me);
 
         if cascade {
             EvalStatus::Cascaded
@@ -488,16 +558,17 @@ impl<T: PartialOrd + Copy + Debug> TreeState<T> {
         if !node.moves.is_empty() {
             let mut new_score = None;
             for node in node.moves.values() {
-                if let TreeNode::State(s) = node {
-                    if let Some(new_score) = &mut new_score {
-                        if (player == me && s.score > *new_score)
-                            || (player != me && s.score < *new_score)
-                        {
-                            *new_score = s.score;
-                        }
-                    } else {
-                        new_score = Some(s.score);
+                let TreeNode::State(s) = node else {
+                    unreachable!()
+                };
+                if let Some(new_score) = &mut new_score {
+                    if (player == me && s.score > *new_score)
+                        || (player != me && s.score < *new_score)
+                    {
+                        *new_score = s.score;
                     }
+                } else {
+                    new_score = Some(s.score);
                 }
             }
             if let Some(new_score) = new_score {
@@ -537,7 +608,7 @@ impl Hard {
 
         let mut total_moves = 0;
         let mut total_cascades = 0;
-        while total_moves < 3000 && total_cascades < 200 {
+        while total_moves < 30000 && total_cascades < 2000 {
             match self.tree_state.eval_next(
                 |grid, cur_turn, me| {
                     if let Some(grid) = grid {

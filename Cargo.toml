@@ -38,6 +38,10 @@ debug-assertions = false
 codegen-units = 1
 lto = "thin"
 
+[profile.relwithdebinfo]
+inherits = "release"
+debug = true
+
 [profile.ci]
 inherits = "dev"
 opt-level = 0
