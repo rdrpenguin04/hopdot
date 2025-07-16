@@ -103,6 +103,7 @@ impl Grid {
             if visited.len() < self.grid.len() {
                 visited.extend(core::iter::repeat_n(false, self.grid.len() - visited.len()));
             }
+            #[allow(clippy::needless_range_loop)] // Looks cleaner than the alternative
             for i in 0..self.grid.len() {
                 visited[i] = false;
             }

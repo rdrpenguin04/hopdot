@@ -360,11 +360,7 @@ impl MoveSegment {
     }
 
     const fn as_move(self) -> Option<(u8, u8)> {
-        if self.0.1 == 255 {
-            None
-        } else {
-            Some(self.0)
-        }
+        if self.0.1 == 255 { None } else { Some(self.0) }
     }
 }
 
@@ -426,7 +422,7 @@ impl<T: PartialOrd + Copy + Debug> fmt::Debug for TreeState<T> {
     }
 }
 
-impl <T: PartialOrd + Copy + Debug> Default for TreeState<T> {
+impl<T: PartialOrd + Copy + Debug> Default for TreeState<T> {
     fn default() -> Self {
         Self::new()
     }
