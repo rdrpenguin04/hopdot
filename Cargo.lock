@@ -2117,7 +2117,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "1.2.1"
+version = "1.2.2"
 dependencies = [
  "ahash",
  "bincode",
@@ -3242,7 +3242,7 @@ dependencies = [
 
 [[package]]
 name = "hopdot"
-version = "1.2.1"
+version = "1.2.2"
 dependencies = [
  "bevy",
  "bevy_defer",
@@ -3258,7 +3258,7 @@ dependencies = [
 
 [[package]]
 name = "hopdot-server"
-version = "1.2.1"
+version = "1.2.2"
 dependencies = [
  "actix-web",
  "actix-web-httpauth",
