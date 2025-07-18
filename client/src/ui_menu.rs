@@ -386,6 +386,24 @@ fn update_config_from_buttons(
             },
         ];
     }
+    // config.players = vec![
+    //     PlayerConfigEntry::Human {
+    //         color: Color::srgb(0.0, 1.0, 0.0),
+    //         name: "Player 1".into(),
+    //     },
+    //     PlayerConfigEntry::Bot {
+    //         color: Color::srgb(0.0, 0.0, 1.0),
+    //         level: 1,
+    //     },
+    //     PlayerConfigEntry::Bot {
+    //         color: Color::srgb(1.0, 0.0, 0.0),
+    //         level: 2,
+    //     },
+    //     PlayerConfigEntry::Bot {
+    //         color: Color::srgb(0.0, 1.0, 1.0),
+    //         level: 3,
+    //     },
+    // ];
 }
 
 pub fn settings(game_assets: &GameAssets) -> impl Bundle {

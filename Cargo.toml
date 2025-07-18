@@ -31,6 +31,12 @@ opt-level = 3
 [profile.dev.package.common]
 opt-level = 1
 
+[profile.dev.package.hopdot]
+opt-level = 1
+
+[profile.dev.package.hopdot-server]
+opt-level = 1
+
 [profile.dev.package.wgpu-types]
 debug-assertions = false
 

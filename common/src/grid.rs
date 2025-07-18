@@ -2,7 +2,9 @@ use core::fmt;
 use std::{
     cell::RefCell,
     collections::VecDeque,
+    mem,
     ops::{Index, IndexMut},
+    ptr::NonNull,
     slice::ChunksExact,
 };
 
@@ -31,10 +33,24 @@ impl Default for GridCell {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
+#[allow(clippy::len_without_is_empty)]
 pub struct Grid {
-    grid: Vec<GridCell>,
+    grid: NonNull<GridCell>,
     width: u8,
+    height: u8,
+    num_players: u8,
+}
+
+unsafe impl Send for Grid {}
+unsafe impl Sync for Grid {}
+
+impl Clone for Grid {
+    fn clone(&self) -> Self {
+        let mut result = Self::new(self.width, self.height, self.num_players);
+        result.grid_inner_mut().clone_from_slice(self.grid_inner());
+        result
+    }
 }
 
 impl fmt::Display for Grid {
@@ -56,11 +72,32 @@ thread_local! {
 }
 
 impl Grid {
-    pub fn new(width: u8, height: u8) -> Self {
+    pub fn new(width: u8, height: u8, num_players: u8) -> Self {
+        let mut grid = vec![GridCell::default(); width as usize * height as usize];
+        let grid_ptr = grid.as_non_null();
+        mem::forget(grid); // We'll get this in `Drop`
         Self {
-            grid: vec![GridCell::default(); width as usize * height as usize],
+            grid: grid_ptr,
             width,
+            height,
+            num_players,
         }
+    }
+}
+
+impl Drop for Grid {
+    fn drop(&mut self) {
+        mem::drop(unsafe { Vec::from_parts(self.grid, self.len(), self.len()) });
+    }
+}
+
+impl Grid {
+    fn grid_inner(&self) -> &[GridCell] {
+        unsafe { core::slice::from_raw_parts(self.grid.as_ptr(), self.len()) }
+    }
+
+    fn grid_inner_mut(&mut self) -> &mut [GridCell] {
+        unsafe { core::slice::from_raw_parts_mut(self.grid.as_ptr(), self.len()) }
     }
 
     pub fn init_capacity(&mut self) {
@@ -86,7 +123,11 @@ impl Grid {
     }
 
     pub const fn height(&self) -> u8 {
-        (self.grid.len() / self.width as usize) as u8
+        self.height
+    }
+
+    pub const fn len(&self) -> usize {
+        self.width as usize * self.height as usize
     }
 
     pub fn iter(&self) -> GridIter<'_> {
@@ -94,17 +135,18 @@ impl Grid {
     }
 
     pub fn iter_mut(&mut self) -> core::slice::ChunksExactMut<'_, GridCell> {
-        self.grid.chunks_exact_mut(self.width as usize)
+        let width = self.width as usize;
+        self.grid_inner_mut().chunks_exact_mut(width)
     }
 
     // If this returns None, the board went into a loop.
     pub fn with_move(&self, x: u8, y: u8, player: u8) -> (Option<Self>, bool) {
         VISITED_BUF.with_borrow_mut(|visited| {
-            if visited.len() < self.grid.len() {
-                visited.extend(core::iter::repeat_n(false, self.grid.len() - visited.len()));
+            if visited.len() < self.len() {
+                visited.extend(core::iter::repeat_n(false, self.len() - visited.len()));
             }
             #[allow(clippy::needless_range_loop)] // Looks cleaner than the alternative
-            for i in 0..self.grid.len() {
+            for i in 0..self.len() {
                 visited[i] = false;
             }
             let mut result = self.clone();
@@ -156,7 +198,7 @@ impl Grid {
 
     pub fn score_for_player(&self, player: u8) -> i32 {
         let mut result = 0;
-        for cell in &self.grid {
+        for cell in self.grid_inner() {
             if cell.owner == player {
                 result += 1;
             } else if cell.owner != player && cell.owner != 0 {
@@ -178,7 +220,7 @@ pub struct GridIter<'a>(core::iter::Map<ChunksExact<'a, GridCell>, fn(&[GridCell
 impl<'a> GridIter<'a> {
     pub fn new(grid: &'a Grid) -> Self {
         Self(
-            grid.grid
+            grid.grid_inner()
                 .chunks_exact(grid.width as usize)
                 .map(|x| GridRow::wrap_ref(x)),
         )
@@ -201,7 +243,8 @@ impl Index<usize> for Grid {
     type Output = GridRow;
 
     fn index(&self, index: usize) -> &GridRow {
-        let row = &self.grid[(index * self.width as usize)..((index + 1) * self.width as usize)];
+        let row =
+            &self.grid_inner()[(index * self.width as usize)..((index + 1) * self.width as usize)];
         GridRow::wrap_ref(row)
     }
 }
@@ -216,8 +259,8 @@ impl Index<u8> for Grid {
 
 impl IndexMut<usize> for Grid {
     fn index_mut(&mut self, index: usize) -> &mut GridRow {
-        let row =
-            &mut self.grid[(index * self.width as usize)..((index + 1) * self.width as usize)];
+        let width = self.width as usize;
+        let row = &mut self.grid_inner_mut()[(index * width)..((index + 1) * width)];
         GridRow::wrap_mut(row)
     }
 }

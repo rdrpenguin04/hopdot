@@ -43,7 +43,7 @@ pub fn tick_ai(
     };
     let ai = &mut ais[level];
 
-    let mut simple_grid = Grid::new(grid.width() as u8, grid.height() as u8);
+    let mut simple_grid = Grid::new(grid.width() as u8, grid.height() as u8, config.players.len() as u8);
     for (y, row) in grid.iter().enumerate() {
         for (x, &cell) in row.iter().enumerate() {
             let (cell, cell_color, _) = cells.get(cell).unwrap();

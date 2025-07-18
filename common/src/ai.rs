@@ -1,7 +1,7 @@
 use core::fmt;
 use std::collections::VecDeque;
 
-use ahash::{HashMap, HashMapExt as _, HashSet, HashSetExt as _};
+use ahash::{HashSet, HashSetExt as _};
 use rand::{Rng, RngCore};
 
 use crate::grid::Grid;
@@ -317,10 +317,29 @@ impl Ai for Medium {
 
 use std::fmt::Debug;
 
+#[derive(Clone)]
 pub struct TreeNodeState<T: PartialOrd + Copy> {
     grid: Option<Grid>, // If this is `None`, the game is over.
-    moves: HashMap<(u8, u8), TreeNode<T>>,
+    moves: Box<[TreeNode<T>]>,
     score: T,
+    unvisited_children: u16,
+}
+
+impl<T: PartialOrd + Copy> TreeNodeState<T> {
+    fn move_mut(&mut self, x: u8, y: u8) -> &mut TreeNode<T> {
+        let width = self.grid.as_ref().unwrap().width();
+        &mut self.moves[x as usize + y as usize * width as usize]
+    }
+
+    fn moves_iter(&self) -> impl Iterator<Item = ((u8, u8), &TreeNode<T>)> {
+        let width = self.grid.as_ref().unwrap().width();
+        self.moves.iter().enumerate().map(move |(i, x)| {
+            (
+                ((i % (width as usize)) as u8, (i / (width as usize)) as u8),
+                x,
+            )
+        })
+    }
 }
 
 impl<T: PartialOrd + Copy + Debug> fmt::Debug for TreeNodeState<T> {
@@ -328,11 +347,12 @@ impl<T: PartialOrd + Copy + Debug> fmt::Debug for TreeNodeState<T> {
         f.debug_struct("TreeNodeState")
             .field("moves", &self.moves)
             .field("score", &self.score)
+            .field("unvis", &self.unvisited_children)
             .finish()
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub enum TreeNode<T: PartialOrd + Copy> {
     #[default]
     Vacant,
@@ -365,7 +385,7 @@ impl MoveSegment {
 }
 
 #[derive(Default)]
-pub struct MoveQueue(VecDeque<MoveSegment>);
+pub struct MoveQueue(Vec<MoveSegment>);
 
 impl MoveQueue {
     pub fn clear(&mut self) {
@@ -374,23 +394,23 @@ impl MoveQueue {
 
     pub fn push(&mut self, m: &[(u8, u8)]) {
         assert!(m.len() < 256, "analysis depth above 255 is not supported");
-        self.0.push_back(MoveSegment::from_depth(m.len() as u8));
         self.0.extend(m.iter().map(|x| MoveSegment::from_move(*x)));
+        self.0.push(MoveSegment::from_depth(m.len() as u8));
     }
 
     pub fn push_suffixed(&mut self, m: &[(u8, u8)], next: (u8, u8)) {
         assert!(m.len() < 255, "analysis depth above 255 is not supported");
-        self.0.push_back(MoveSegment::from_depth(m.len() as u8 + 1));
         self.0.extend(m.iter().map(|x| MoveSegment::from_move(*x)));
-        self.0.push_back(MoveSegment::from_move(next));
+        self.0.push(MoveSegment::from_move(next));
+        self.0.push(MoveSegment::from_depth(m.len() as u8 + 1));
     }
 
     pub fn pop(&mut self) -> Option<impl ExactSizeIterator<Item = (u8, u8)>> {
-        let depth = self.0.pop_front()?;
+        let depth = self.0.pop()?;
         let Some(depth) = depth.as_depth() else {
             panic!("queue in invalid state")
         };
-        Some(self.0.drain(0..(depth as usize)).map(|x| {
+        Some(self.0.drain((self.0.len() - depth as usize)..).map(|x| {
             let Some(m) = x.as_move() else {
                 panic!("queue in invalid state")
             };
@@ -475,13 +495,12 @@ impl<T: PartialOrd + Copy + Debug> TreeState<T> {
         };
         self.moves_buf.clear();
         self.moves_buf.extend(moves);
-        if max_depth > 0 && self.moves_buf.len() > max_depth {
-            return EvalStatus::Done; // Hit depth limit
-        }
         let mut cur_grid = Some(grid);
         let player_count = grid.player_count();
         let mut cur_player = self.me;
         let mut node = &mut self.root;
+
+        // println!("\nStarting move: {:?}", self.moves_buf);
 
         let (grid, player, cascade) = if self.moves_buf.is_empty() {
             (cur_grid.cloned(), cur_player, false)
@@ -490,15 +509,18 @@ impl<T: PartialOrd + Copy + Debug> TreeState<T> {
             loop {
                 let m = moves_iter.next().unwrap();
                 let TreeNode::State(node_inner) = node else {
-                    unreachable!()
+                    panic!("Error in pruning")
                 };
+                // println!("m = {m:?}, node = {node_inner:?}");
                 cur_grid = node_inner.grid.as_ref();
                 let grid = cur_grid.unwrap();
-                node = node_inner.moves.entry(m).or_insert(TreeNode::Vacant);
+                node_inner.unvisited_children -= 1;
+                cur_player = cur_player % player_count + 1;
                 if moves_iter.peek().is_some() {
-                    cur_player = cur_player % player_count + 1;
+                    node = node_inner.move_mut(m.0, m.1);
                 } else {
                     let (grid, cascade) = grid.with_move(m.0, m.1, cur_player);
+                    node = node_inner.move_mut(m.0, m.1);
                     break (grid, cur_player % player_count + 1, cascade);
                 }
             }
@@ -506,21 +528,40 @@ impl<T: PartialOrd + Copy + Debug> TreeState<T> {
 
         let score = eval(grid.as_ref(), player, self.me);
         let mut num_moves = 0;
-        if let Some(grid) = &grid {
-            for (y, row) in grid.iter().enumerate_u8() {
-                for (x, cell) in row.iter().enumerate_u8() {
-                    if cell.owner == 0 || cell.owner == player {
-                        num_moves += 1;
-                        self.eval_queue.push_suffixed(&self.moves_buf, (x, y));
+        let moves = {
+            if self.moves_buf.len() < max_depth
+                && let Some(grid) = &grid
+            {
+                for (y, row) in grid.iter().enumerate_u8() {
+                    for (x, cell) in row.iter().enumerate_u8() {
+                        if cell.owner == 0 || cell.owner == player {
+                            num_moves += 1;
+                            self.eval_queue.push_suffixed(&self.moves_buf, (x, y));
+                        }
                     }
                 }
+
+                vec![TreeNode::Vacant; grid.width() as usize * grid.height() as usize]
+                    .into_boxed_slice()
+            } else {
+                Box::new([])
             }
-        }
+        };
         *node = TreeNode::State(TreeNodeState {
             grid,
-            moves: HashMap::with_capacity(num_moves), // populated on explore
+            moves, // populated on explore
             score,
+            unvisited_children: num_moves,
         });
+
+        let mut node_to_update = &mut self.root;
+        for m in &self.moves_buf {
+            let TreeNode::State(s) = node_to_update else {
+                unreachable!()
+            };
+            s.unvisited_children += num_moves;
+            node_to_update = s.move_mut(m.0, m.1);
+        }
 
         Self::propagate_recursive(&mut self.root, &self.moves_buf, self.me, self.me);
 
@@ -544,31 +585,39 @@ impl<T: PartialOrd + Copy + Debug> TreeState<T> {
             return;
         };
         if !rest.is_empty() {
-            Self::propagate_recursive(
-                node.moves.get_mut(m).unwrap(),
-                rest,
-                player % node.grid.as_ref().unwrap().player_count() + 1,
-                me,
-            );
+            let player_count = node.grid.as_ref().unwrap().player_count();
+            Self::propagate_recursive(node.move_mut(m.0, m.1), rest, player % player_count + 1, me);
         }
         if !node.moves.is_empty() {
             let mut new_score = None;
-            for node in node.moves.values() {
-                let TreeNode::State(s) = node else {
-                    unreachable!()
-                };
-                if let Some(new_score) = &mut new_score {
-                    if (player == me && s.score > *new_score)
-                        || (player != me && s.score < *new_score)
-                    {
-                        *new_score = s.score;
+            for node in &node.moves {
+                if let TreeNode::State(s) = node {
+                    if let Some(new_score) = &mut new_score {
+                        if (player == me && s.score > *new_score)
+                            || (player != me && s.score < *new_score)
+                        {
+                            *new_score = s.score;
+                        }
+                    } else {
+                        new_score = Some(s.score);
                     }
-                } else {
-                    new_score = Some(s.score);
                 }
             }
             if let Some(new_score) = new_score {
                 node.score = new_score;
+                if node.unvisited_children == 0 {
+                    for node in &mut node.moves {
+                        let remove = if let TreeNode::State(s) = node {
+                            (player == me && s.score < new_score)
+                                || (player != me && s.score > new_score)
+                        } else {
+                            false
+                        };
+                        if remove {
+                            *node = TreeNode::Vacant;
+                        }
+                    }
+                }
             }
         }
     }
@@ -577,9 +626,9 @@ impl<T: PartialOrd + Copy + Debug> TreeState<T> {
         let TreeNode::State(s) = &self.root else {
             panic!("need at least one evaluation round")
         };
-        s.moves.iter().filter_map(|(m, n)| {
+        s.moves_iter().filter_map(|(m, n)| {
             if let TreeNode::State(n) = n {
-                Some((*m, n.score))
+                Some((m, n.score))
             } else {
                 None
             }
@@ -591,6 +640,7 @@ impl<T: PartialOrd + Copy + Debug> TreeState<T> {
 pub struct Hard {
     decision: Option<(u8, u8)>,
     tree_state: TreeState<i32>,
+    num_players: u8,
 }
 
 impl Hard {
@@ -604,19 +654,18 @@ impl Hard {
 
         let mut total_moves = 0;
         let mut total_cascades = 0;
-        while total_moves < 30000 && total_cascades < 2000 {
+        while total_moves < 100000 && total_cascades < 10000 {
             match self.tree_state.eval_next(
                 |grid, cur_turn, me| {
                     if let Some(grid) = grid {
                         grid.score_for_player(me)
                     } else if cur_turn != me {
-                        // FIXME: I think my logic is wrong somewhere in the tree logic, because this doesn't feel right, but it makes the AI work
-                        i32::MAX
-                    } else {
                         i32::MIN
+                    } else {
+                        i32::MAX
                     }
                 },
-                3,
+                self.num_players as usize + 1,
             ) {
                 EvalStatus::Cascaded => {
                     total_cascades += 1;
@@ -650,6 +699,7 @@ impl Ai for Hard {
         self.decision = None;
         self.tree_state.clear();
         self.tree_state.set_grid(grid.clone());
+        self.num_players = grid.player_count();
     }
 
     fn tick(&mut self, grid: &Grid, player: u8, rng: &mut dyn RngCore) -> Option<(u8, u8)> {
@@ -708,7 +758,7 @@ mod test {
         // As the Hard AI is supposed to have lookahead, this shouldn't be difficult.
         for y in [0, 1] {
             for x in [0, 1] {
-                let mut grid = Grid::new(2, 2);
+                let mut grid = Grid::new(2, 2, 2);
                 grid.init_capacity();
                 let grid = grid.with_move(x, y, 1).0.unwrap();
                 ai.start_move(&grid);
