@@ -497,7 +497,7 @@ impl<T: PartialOrd + Copy + Debug> TreeState<T> {
         self.moves_buf.extend(moves);
         let mut cur_grid = Some(grid);
         let player_count = grid.player_count();
-        let mut cur_player = self.me;
+        let mut cur_player = (self.me + player_count - 1) % player_count;
         let mut node = &mut self.root;
 
         // println!("\nStarting move: {:?}", self.moves_buf);
@@ -521,12 +521,20 @@ impl<T: PartialOrd + Copy + Debug> TreeState<T> {
                 } else {
                     let (grid, cascade) = grid.with_move(m.0, m.1, cur_player);
                     node = node_inner.move_mut(m.0, m.1);
-                    break (grid, cur_player % player_count + 1, cascade);
+                    break (grid, cur_player, cascade);
                 }
             }
         };
 
+        // if let Some(grid) = &grid {
+        //     println!("{grid}");
+        // } else {
+        //     println!("gone infinite");
+        // }
+
         let score = eval(grid.as_ref(), player, self.me);
+
+        cur_player = cur_player % player_count + 1;
         let mut num_moves = 0;
         let moves = {
             if self.moves_buf.len() < max_depth
@@ -534,7 +542,7 @@ impl<T: PartialOrd + Copy + Debug> TreeState<T> {
             {
                 for (y, row) in grid.iter().enumerate_u8() {
                     for (x, cell) in row.iter().enumerate_u8() {
-                        if cell.owner == 0 || cell.owner == player {
+                        if cell.owner == 0 || cell.owner == cur_player {
                             num_moves += 1;
                             self.eval_queue.push_suffixed(&self.moves_buf, (x, y));
                         }

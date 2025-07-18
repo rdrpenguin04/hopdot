@@ -208,9 +208,8 @@ impl Grid {
         result
     }
 
-    // TODO: Add this as a field
     pub fn player_count(&self) -> u8 {
-        2
+        self.num_players
     }
 }
 
