@@ -91,7 +91,7 @@ pub struct GameInfo {
 #[derive(Encode, Decode, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BoardInfo(pub Vec<CellState>);
 
-#[derive(Encode, Decode, Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Encode, Decode, Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum ProposalType {
     Resign,
     Draw,
@@ -123,7 +123,7 @@ pub enum GamePacket {
     SPlayerStatus(NonZeroU8, PlayerStatus),
 }
 
-#[derive(Encode, Decode, Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Encode, Decode, Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum MoveResult {
     Refused,
     CellUpdated,
@@ -139,7 +139,7 @@ pub struct Timestamp(#[serde(with = "chrono::serde::ts_milliseconds")] pub chron
 /// The Configuration is:
 /// * Little Endian Byte Order
 /// * Varint Encoding
-/// * A packet contains at most 256 bytes.
+/// * A packet contains at most 1024 bytes.
 pub const fn bincode_config() -> impl Config {
-    config::standard().with_limit::<256>()
+    config::standard().with_limit::<1024>()
 }

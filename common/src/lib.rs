@@ -1,5 +1,5 @@
 #![feature(impl_trait_in_assoc_type)]
-#![feature(box_vec_non_null)]
+#![feature(box_vec_non_null, exclusive_wrapper)]
 
 pub mod ai;
 pub mod grid;

@@ -140,6 +140,7 @@ impl Grid {
     }
 
     // If this returns None, the board went into a loop.
+    // TODO: return MoveResult (or similar) instead?
     pub fn with_move(&self, x: u8, y: u8, player: u8) -> (Option<Self>, bool) {
         VISITED_BUF.with_borrow_mut(|visited| {
             if visited.len() < self.len() {
