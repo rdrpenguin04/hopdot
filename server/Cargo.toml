@@ -20,3 +20,8 @@ serde_json.workspace = true
 time.workspace = true
 uuid = { workspace = true, features = ["v7"] }
 common.workspace = true
+futures = { version = "0.3.31", default-features = false, features = [
+    "std",
+    "alloc",
+    "async-await",
+] }
