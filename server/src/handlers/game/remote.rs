@@ -46,3 +46,10 @@ impl Actor for RemoteActor {
         })
     }
 }
+
+impl Drop for RemoteActor {
+    fn drop(&mut self) {
+        self.turn_status
+            .store(!0, std::sync::atomic::Ordering::Relaxed);
+    }
+}
