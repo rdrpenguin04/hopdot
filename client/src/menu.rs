@@ -11,12 +11,75 @@ use crate::{
     ui_menu::{CreditsUiTree, RulesUiTree, SettingsUiTree},
 };
 
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect, SubStates)]
-#[source(MainState = MainState::Menu)]
-pub enum MenuState {
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect)]
+pub enum MainMenuSubState {
     #[default]
     Main,
+    StartGame,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Reflect, SubStates)]
+#[source(MainState = MainState::Menu)]
+pub enum MenuState {
+    Main(Option<MainMenuSubState>),
     Pause,
+}
+
+#[allow(dead_code)] // Currently not using some directions
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FlyDirection {
+    North,
+    South,
+    West,
+    East,
+    Side,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FlyAction {
+    Stay,
+    FlyFrom(FlyDirection),
+    FlyTo(FlyDirection),
+}
+
+impl MenuState {
+    fn eq_top_menu(&self, other: &Self) -> bool {
+        core::mem::discriminant(self) == core::mem::discriminant(other)
+    }
+
+    fn shows_for_menu(&self, menu: &Self) -> bool {
+        match (self, menu) {
+            (Self::Main(None), Self::Main(_)) => true,
+            (Self::Main(x), Self::Main(y)) if x == y => true,
+            (Self::Pause, Self::Pause) => true,
+            _ => false,
+        }
+    }
+
+    fn action_for_menu(&self, prev: Option<&Self>, menu: Option<&Self>) -> FlyAction {
+        use FlyAction::*;
+        use FlyDirection::*;
+        match (self, prev, menu) {
+            // Menu hasn't changed
+            (_, y, z) if y == z => Stay,
+            // Top-level menu has changed, we're in the new menu
+            (x, Some(y), Some(z)) if x.shows_for_menu(z) && !y.eq_top_menu(z) => FlyFrom(Side),
+            // Top-level menu has changed, we're in the old menu
+            (x, Some(y), Some(z)) if x.shows_for_menu(y) && !y.eq_top_menu(z) => FlyTo(North),
+            // Entering menu, we're in the new menu
+            (x, None, Some(z)) if x.shows_for_menu(z) => FlyFrom(Side),
+            // Exiting menu, we're in the old menu
+            (x, Some(y), None) if x.shows_for_menu(y) => FlyTo(North),
+            // We're not involved in this transition
+            _ => Stay,
+        }
+    }
+}
+
+impl Default for MenuState {
+    fn default() -> Self {
+        Self::Main(Some(MainMenuSubState::Main))
+    }
 }
 
 #[derive(Component, Default, Reflect)]
@@ -33,6 +96,18 @@ pub struct MenuElement {
     pub target: Option<Transform>,
     pub menu_action: Option<String>,
     pub side: f32, // -1.0 or 1.0, probably
+}
+
+impl MenuElement {
+    fn vec_from_dir(&self, dir: FlyDirection) -> Vec3 {
+        match dir {
+            FlyDirection::North => vec3(0.0, 0.0, -20.0),
+            FlyDirection::South => vec3(0.0, 0.0, 20.0),
+            FlyDirection::West => vec3(-20.0, 0.0, 0.0),
+            FlyDirection::East => vec3(20.0, 0.0, 0.0),
+            FlyDirection::Side => self.side * vec3(20.0, 0.0, 0.0),
+        }
+    }
 }
 
 fn insert_menu_element(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
@@ -101,25 +176,24 @@ fn switch_menus(
     menu_elements: Query<(&MenuElement, &mut TargetTransform, &mut Transform, &mut Visibility)>,
 ) {
     for (el, mut target, mut transform, mut visibility) in menu_elements {
-        if *prev_menu == Some(el.for_menu) {
-            // Fly out
-            let Some(mut new_transform) = el.target else {
-                continue;
-            };
-            new_transform.translation += vec3(0.0, 0.0, -20.0);
-            target.0 = new_transform;
-        }
-        if let Some(ref cur_menu) = cur_menu
-            && **cur_menu == el.for_menu
-        {
-            // Fly in
-            let Some(mut new_transform) = el.target else {
-                continue;
-            };
-            new_transform.translation += el.side * vec3(20.0, 0.0, 0.0);
-            *transform = new_transform;
-            target.0 = el.target.unwrap();
-            *visibility = Visibility::Inherited;
+        match el.for_menu.action_for_menu(prev_menu.as_ref(), cur_menu.as_ref().map(|x| &***x)) {
+            FlyAction::FlyTo(dir) => {
+                let Some(mut new_transform) = el.target else {
+                    continue;
+                };
+                new_transform.translation += el.vec_from_dir(dir);
+                target.0 = new_transform;
+            }
+            FlyAction::FlyFrom(dir) => {
+                let Some(mut new_transform) = el.target else {
+                    continue;
+                };
+                new_transform.translation += el.vec_from_dir(dir);
+                *transform = new_transform;
+                target.0 = el.target.unwrap();
+                *visibility = Visibility::Inherited;
+            }
+            FlyAction::Stay => {}
         }
     }
     *prev_menu = cur_menu.map(|x| **x);
@@ -139,7 +213,7 @@ fn cleanup_menus(
     timer.tick(time.delta());
     if timer.just_finished() {
         for (el, mut visibility) in menu_elements {
-            if cur_menu.as_ref().map(|x| ***x) != Some(el.for_menu) {
+            if cur_menu.as_ref().map(|x| el.for_menu.shows_for_menu(x)) != Some(true) {
                 *visibility = Visibility::Hidden;
             }
         }
