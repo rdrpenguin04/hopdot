@@ -2352,6 +2352,7 @@ name = "common"
 version = "1.2.3"
 dependencies = [
  "ahash",
+ "bevy",
  "bincode",
  "bytemuck",
  "chrono",
@@ -3659,6 +3660,8 @@ dependencies = [
  "actix-ws",
  "anyhow",
  "argon2",
+ "bevy",
+ "bevy_defer",
  "check-if-email-exists",
  "common",
  "env_logger",
