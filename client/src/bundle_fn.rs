@@ -1,5 +1,5 @@
 //! Code from <https://github.com/DylanRJohnston/abiogenesis>.
-//! Used with permission (I asked for a license on the repo, so hopefully this won't be so handwavey in the future).
+//! Abiogenesis is dual-licensed under the MIT and Apache v2 licenses. Credit goes to Dylan for the code. Thanks!
 
 use bevy::prelude::*;
 

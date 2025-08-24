@@ -56,20 +56,40 @@ impl MenuState {
         }
     }
 
+    fn is_deeper_than(&self, menu: &Self) -> bool {
+        // TODO: generalize
+        *self == Self::Main(Some(MainMenuSubState::StartGame)) && *menu == Self::Main(Some(MainMenuSubState::Main))
+    }
+
+    fn is_top_level(&self) -> bool {
+        matches!(self, Self::Main(None) | Self::Pause)
+    }
+
     fn action_for_menu(&self, prev: Option<&Self>, menu: Option<&Self>) -> FlyAction {
         use FlyAction::*;
         use FlyDirection::*;
+        
         match (self, prev, menu) {
             // Menu hasn't changed
             (_, y, z) if y == z => Stay,
-            // Top-level menu has changed, we're in the new menu
-            (x, Some(y), Some(z)) if x.shows_for_menu(z) && !y.eq_top_menu(z) => FlyFrom(Side),
-            // Top-level menu has changed, we're in the old menu
-            (x, Some(y), Some(z)) if x.shows_for_menu(y) && !y.eq_top_menu(z) => FlyTo(North),
             // Entering menu, we're in the new menu
             (x, None, Some(z)) if x.shows_for_menu(z) => FlyFrom(Side),
             // Exiting menu, we're in the old menu
             (x, Some(y), None) if x.shows_for_menu(y) => FlyTo(North),
+            // Top-level menu has changed, we're in the new menu
+            (x, Some(y), Some(z)) if x.shows_for_menu(z) && !y.eq_top_menu(z) => FlyFrom(Side),
+            // Top-level menu has changed, we're in the old menu
+            (x, Some(y), Some(z)) if x.shows_for_menu(y) && !y.eq_top_menu(z) => FlyTo(North),
+            // Changing submenu level and we don't care
+            (x, Some(y), Some(z)) if x.is_top_level() && y.eq_top_menu(z) => Stay,
+            // Going to deeper menu level, we're in the new menu
+            (x, Some(y), Some(z)) if x.shows_for_menu(z) && z.is_deeper_than(y) => FlyFrom(Side),
+            // Going to deeper menu level, we're in the old menu
+            (x, Some(y), Some(z)) if x.shows_for_menu(y) && z.is_deeper_than(y) => FlyTo(South),
+            // Going to shallower menu level, we're in the new menu
+            (x, Some(y), Some(z)) if x.shows_for_menu(z) && !z.is_deeper_than(y) => FlyFrom(South),
+            // Going to shallower menu level, we're in the old menu
+            (x, Some(y), Some(z)) if x.shows_for_menu(y) && !z.is_deeper_than(y) => FlyTo(Side),
             // We're not involved in this transition
             _ => Stay,
         }
@@ -159,9 +179,12 @@ fn insert_menu_element(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
                 );
             }
             "start-game" => {
-                entity_commands.observe(|_: Trigger<Pointer<Click>>, mut next_state: ResMut<NextState<MainState>>| {
-                    next_state.set(MainState::Game);
+                entity_commands.observe(|_: Trigger<Pointer<Click>>, mut next_menu: ResMut<NextState<MenuState>>| {
+                    next_menu.set(MenuState::Main(Some(MainMenuSubState::StartGame)));
                 });
+                // entity_commands.observe(|_: Trigger<Pointer<Click>>, mut next_state: ResMut<NextState<MainState>>| {
+                //     next_state.set(MainState::Game);
+                // });
             }
             x => {
                 warn!("unknown action: {x}");
