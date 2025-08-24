@@ -7,3 +7,5 @@ pub mod pgn;
 pub mod proto;
 
 pub mod version;
+
+pub const GUEST_USERNAME_SENTINEL: &str = "##GUEST##";

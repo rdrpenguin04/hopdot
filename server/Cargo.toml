@@ -25,3 +25,5 @@ futures = { version = "0.3.31", default-features = false, features = [
     "alloc",
     "async-await",
 ] }
+argon2 = "0.5.3"
+check-if-email-exists = "0.9.1"
