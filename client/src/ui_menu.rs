@@ -42,7 +42,40 @@ fn update_ui_scale(mut ui_scale: ResMut<UiScale>, windows: Query<&Window, With<P
     };
 }
 
-fn button_with_bg(game_assets: &GameAssets, text: impl Into<String>, color: Color) -> impl Bundle {
+fn h1(ga: &GameAssets, text: impl Into<String>) -> impl Bundle {
+    (
+        Text::new(text),
+        TextFont {
+            font: ga.bold_font.clone_weak(),
+            font_size: 60.0,
+            ..default()
+        },
+    )
+}
+
+fn h2(ga: &GameAssets, text: impl Into<String>) -> impl Bundle {
+    (
+        Text::new(text),
+        TextFont {
+            font: ga.bold_font.clone_weak(),
+            font_size: 40.0,
+            ..default()
+        },
+    )
+}
+
+fn p(ga: &GameAssets, text: impl Into<String>) -> impl Bundle {
+    (
+        Text::new(text),
+        TextFont {
+            font: ga.mono_font.clone_weak(),
+            font_size: 20.0,
+            ..default()
+        },
+    )
+}
+
+fn button_with_bg(ga: &GameAssets, text: impl Into<String>, color: Color) -> impl Bundle {
     (
         Node {
             margin: UiRect::horizontal(Val::Px(5.0)),
@@ -57,7 +90,7 @@ fn button_with_bg(game_assets: &GameAssets, text: impl Into<String>, color: Colo
         children![(
             Text::new(text),
             TextFont {
-                font: game_assets.mono_font.clone_weak(),
+                font: ga.mono_font.clone_weak(),
                 font_size: 15.0,
                 ..default()
             },
@@ -65,19 +98,14 @@ fn button_with_bg(game_assets: &GameAssets, text: impl Into<String>, color: Colo
     )
 }
 
-fn back_to_main_menu<T: Component>(game_assets: &GameAssets) -> impl Bundle {
+fn back_to_main_menu<T: Component>(ga: &GameAssets) -> impl Bundle {
     (
         Node {
             margin: UiRect::top(Val::Px(20.0)),
             ..default()
         },
         Button,
-        Text::new("Back to main menu"),
-        TextFont {
-            font: game_assets.mono_font.clone_weak(),
-            font_size: 20.0,
-            ..default()
-        },
+        p(ga, "Back to main menu"),
         Outline::new(Val::Px(5.0), Val::Px(5.0), Color::WHITE),
         BorderRadius::all(Val::Px(5.0)),
         observe(
@@ -99,15 +127,15 @@ fn back_to_main_menu<T: Component>(game_assets: &GameAssets) -> impl Bundle {
     )
 }
 
-fn left_button(game_assets: &GameAssets) -> impl Bundle {
-    button_with_bg(game_assets, "<", Color::srgb(0.2, 0.2, 0.2))
+fn left_button(ga: &GameAssets) -> impl Bundle {
+    button_with_bg(ga, "<", Color::srgb(0.2, 0.2, 0.2))
 }
 
-fn right_button(game_assets: &GameAssets) -> impl Bundle {
-    button_with_bg(game_assets, ">", Color::srgb(0.2, 0.2, 0.2))
+fn right_button(ga: &GameAssets) -> impl Bundle {
+    button_with_bg(ga, ">", Color::srgb(0.2, 0.2, 0.2))
 }
 
-pub fn game_end(game_assets: &GameAssets) -> impl Bundle {
+pub fn game_end(ga: &GameAssets) -> impl Bundle {
     (
         GameEndUiTree,
         Node {
@@ -125,20 +153,15 @@ pub fn game_end(game_assets: &GameAssets) -> impl Bundle {
                     margin: UiRect::top(Val::Percent(10.0)),
                     ..default()
                 },
-                Text::new("Player 1 wins!"),
-                TextFont {
-                    font: game_assets.bold_font.clone_weak(),
-                    font_size: 60.0,
-                    ..default()
-                },
+                h1(ga, "Player 1 wins!"),
                 GameEndText,
             ),
-            back_to_main_menu::<GameEndUiTree>(game_assets)
+            back_to_main_menu::<GameEndUiTree>(ga)
         ],
     )
 }
 
-pub fn credits(game_assets: &GameAssets) -> impl Bundle {
+pub fn credits(ga: &GameAssets) -> impl Bundle {
     (
         CreditsUiTree,
         Node {
@@ -152,29 +175,18 @@ pub fn credits(game_assets: &GameAssets) -> impl Bundle {
         },
         Visibility::Hidden,
         children![
-            (
-                Text::new("Credits"),
-                TextFont {
-                    font: game_assets.bold_font.clone_weak(),
-                    font_size: 60.0,
-                    ..default()
-                },
-            ),
+            h1(ga, "Credits"),
             (
                 Node {
                     margin: UiRect::top(Val::Px(10.0)),
                     ..default()
                 },
-                Text::new(
+                p(
+                    ga,
                     "Coding and most assets by Ray Redondo\nOriginal concept from KJumpingCube\n\nThis game is open source! Check it out at https://github.com/rdrpenguin04/hopdot"
                 ),
-                TextFont {
-                    font: game_assets.mono_font.clone_weak(),
-                    font_size: 20.0,
-                    ..default()
-                },
             ),
-            back_to_main_menu::<CreditsUiTree>(game_assets),
+            back_to_main_menu::<CreditsUiTree>(ga),
             (
                 Node {
                     margin: UiRect::top(Val::Px(60.0)),
@@ -184,7 +196,7 @@ pub fn credits(game_assets: &GameAssets) -> impl Bundle {
                     "© 2025 Lightning Creations. The Lightning Creations logo is a trademark of Lightning Creations and is used by permission of the LC Admins. For more information, visit https://lcdev.xyz"
                 ),
                 TextFont {
-                    font: game_assets.mono_font.clone_weak(),
+                    font: ga.mono_font.clone_weak(),
                     font_size: 7.0,
                     ..default()
                 },
@@ -193,7 +205,7 @@ pub fn credits(game_assets: &GameAssets) -> impl Bundle {
     )
 }
 
-pub fn rules(game_assets: &GameAssets) -> impl Bundle {
+pub fn rules(ga: &GameAssets) -> impl Bundle {
     #[derive(Component)]
     struct RulesText;
 
@@ -228,26 +240,14 @@ pub fn rules(game_assets: &GameAssets) -> impl Bundle {
         },
         Visibility::Hidden,
         children![
-            (
-                Text::new("Rules"),
-                TextFont {
-                    font: game_assets.bold_font.clone_weak(),
-                    font_size: 60.0,
-                    ..default()
-                },
-            ),
+            h1(ga, "Rules"),
             (
                 Node {
                     min_width: Val::Px(0.0),
                     max_width: Val::Percent(50.0),
                     ..default()
                 },
-                Text::new(RULES_PAGES[0]),
-                TextFont {
-                    font: game_assets.mono_font.clone_weak(),
-                    font_size: 20.0,
-                    ..default()
-                },
+                p(ga, RULES_PAGES[0]),
                 RulesText,
             ),
             (
@@ -259,16 +259,9 @@ pub fn rules(game_assets: &GameAssets) -> impl Bundle {
                     ..default()
                 },
                 children![
+                    p(ga, "Page: "),
                     (
-                        Text::new("Page: "),
-                        TextFont {
-                            font: game_assets.mono_font.clone_weak(),
-                            font_size: 20.0,
-                            ..default()
-                        },
-                    ),
-                    (
-                        left_button(game_assets),
+                        left_button(ga),
                         observe(
                             |_: Trigger<Pointer<Click>>,
                              mut rules_page_number: ResMut<RulesPageNumber>,
@@ -283,17 +276,9 @@ pub fn rules(game_assets: &GameAssets) -> impl Bundle {
                             },
                         )
                     ),
+                    (p(ga, "1"), RulesPageNumberText,),
                     (
-                        Text::new("1"),
-                        TextFont {
-                            font: game_assets.mono_font.clone_weak(),
-                            font_size: 20.0,
-                            ..default()
-                        },
-                        RulesPageNumberText,
-                    ),
-                    (
-                        right_button(game_assets),
+                        right_button(ga),
                         observe(
                             |_: Trigger<Pointer<Click>>,
                              mut rules_page_number: ResMut<RulesPageNumber>,
@@ -310,7 +295,7 @@ pub fn rules(game_assets: &GameAssets) -> impl Bundle {
                     )
                 ]
             ),
-            back_to_main_menu::<RulesUiTree>(game_assets),
+            back_to_main_menu::<RulesUiTree>(ga),
         ],
     )
 }
@@ -406,7 +391,7 @@ fn update_config_from_buttons(
     // ];
 }
 
-pub fn settings(game_assets: &GameAssets) -> impl Bundle {
+pub fn settings(ga: &GameAssets) -> impl Bundle {
     #[derive(Component)]
     struct WidthText;
     #[derive(Component)]
@@ -426,14 +411,7 @@ pub fn settings(game_assets: &GameAssets) -> impl Bundle {
         },
         Visibility::Hidden,
         children![
-            (
-                Text::new("Settings"),
-                TextFont {
-                    font: game_assets.bold_font.clone_weak(),
-                    font_size: 60.0,
-                    ..default()
-                },
-            ),
+            h1(ga, "Settings"),
             (
                 Node {
                     margin: UiRect::top(Val::Px(5.0)),
@@ -441,14 +419,7 @@ pub fn settings(game_assets: &GameAssets) -> impl Bundle {
                     ..default()
                 },
                 children![
-                    (
-                        Text::new("Player Config"),
-                        TextFont {
-                            font: game_assets.bold_font.clone_weak(),
-                            font_size: 40.0,
-                            ..default()
-                        },
-                    ),
+                    h2(ga, "Player Config"),
                     (
                         Node {
                             margin: UiRect::top(Val::Px(20.0)),
@@ -457,17 +428,10 @@ pub fn settings(game_assets: &GameAssets) -> impl Bundle {
                             ..default()
                         },
                         children![
-                            (
-                                Text::new("mode: "),
-                                TextFont {
-                                    font: game_assets.mono_font.clone_weak(),
-                                    font_size: 20.0,
-                                    ..default()
-                                },
-                            ),
-                            (button_with_bg(game_assets, "Player vs. Player", Color::srgb(0.2, 0.2, 0.2)), PlayModeSwitch(0)),
-                            (button_with_bg(game_assets, "Player vs. Bot", Color::srgb(0.4, 0.4, 0.4)), PlayModeSwitch(1)),
-                            (button_with_bg(game_assets, "Bot vs. Bot", Color::srgb(0.2, 0.2, 0.2)), PlayModeSwitch(2)),
+                            p(ga, "mode: "),
+                            (button_with_bg(ga, "Player vs. Player", Color::srgb(0.2, 0.2, 0.2)), PlayModeSwitch(0)),
+                            (button_with_bg(ga, "Player vs. Bot", Color::srgb(0.4, 0.4, 0.4)), PlayModeSwitch(1)),
+                            (button_with_bg(ga, "Bot vs. Bot", Color::srgb(0.2, 0.2, 0.2)), PlayModeSwitch(2)),
                         ]
                     ),
                     (
@@ -479,18 +443,11 @@ pub fn settings(game_assets: &GameAssets) -> impl Bundle {
                             ..default()
                         },
                         children![
-                            (
-                                Text::new("bot level: "),
-                                TextFont {
-                                    font: game_assets.mono_font.clone_weak(),
-                                    font_size: 20.0,
-                                    ..default()
-                                },
-                            ),
-                            (button_with_bg(game_assets, "Easiest", Color::srgb(0.4, 0.4, 0.4)), BotLevelSwitch(0)),
-                            (button_with_bg(game_assets, "Easy", Color::srgb(0.2, 0.2, 0.2)), BotLevelSwitch(1)),
-                            (button_with_bg(game_assets, "Medium", Color::srgb(0.2, 0.2, 0.2)), BotLevelSwitch(2)),
-                            (button_with_bg(game_assets, "Hard", Color::srgb(0.2, 0.2, 0.2)), BotLevelSwitch(3)),
+                            p(ga, "bot level: "),
+                            (button_with_bg(ga, "Easiest", Color::srgb(0.4, 0.4, 0.4)), BotLevelSwitch(0)),
+                            (button_with_bg(ga, "Easy", Color::srgb(0.2, 0.2, 0.2)), BotLevelSwitch(1)),
+                            (button_with_bg(ga, "Medium", Color::srgb(0.2, 0.2, 0.2)), BotLevelSwitch(2)),
+                            (button_with_bg(ga, "Hard", Color::srgb(0.2, 0.2, 0.2)), BotLevelSwitch(3)),
                             (
                                 Node {
                                     width: Val::Px(100.0),
@@ -498,7 +455,7 @@ pub fn settings(game_assets: &GameAssets) -> impl Bundle {
                                 },
                                 Text::new("last level coming soon"),
                                 TextFont {
-                                    font: game_assets.mono_font.clone_weak(),
+                                    font: ga.mono_font.clone_weak(),
                                     font_size: 8.0,
                                     ..default()
                                 },
@@ -514,14 +471,7 @@ pub fn settings(game_assets: &GameAssets) -> impl Bundle {
                     ..default()
                 },
                 children![
-                    (
-                        Text::new("Grid Size"),
-                        TextFont {
-                            font: game_assets.bold_font.clone_weak(),
-                            font_size: 40.0,
-                            ..default()
-                        },
-                    ),
+                    h2(ga, "Grid Size"),
                     (
                         Node {
                             margin: UiRect::top(Val::Px(10.0)),
@@ -531,16 +481,9 @@ pub fn settings(game_assets: &GameAssets) -> impl Bundle {
                             ..default()
                         },
                         children![
+                            p(ga, "width: "),
                             (
-                                Text::new("width: "),
-                                TextFont {
-                                    font: game_assets.mono_font.clone_weak(),
-                                    font_size: 20.0,
-                                    ..default()
-                                },
-                            ),
-                            (
-                                left_button(game_assets),
+                                left_button(ga),
                                 observe(
                                     |_: Trigger<Pointer<Click>>, mut config: ResMut<Config>, mut width_text: Query<&mut Text, With<WidthText>>| {
                                         config.grid_size.0 -= 1;
@@ -551,17 +494,9 @@ pub fn settings(game_assets: &GameAssets) -> impl Bundle {
                                     },
                                 )
                             ),
+                            (p(ga, " 6"), WidthText),
                             (
-                                Text::new(" 6"),
-                                TextFont {
-                                    font: game_assets.mono_font.clone_weak(),
-                                    font_size: 20.0,
-                                    ..default()
-                                },
-                                WidthText,
-                            ),
-                            (
-                                right_button(game_assets),
+                                right_button(ga),
                                 observe(
                                     |_: Trigger<Pointer<Click>>, mut config: ResMut<Config>, mut width_text: Query<&mut Text, With<WidthText>>| {
                                         config.grid_size.0 += 1;
@@ -583,16 +518,9 @@ pub fn settings(game_assets: &GameAssets) -> impl Bundle {
                             ..default()
                         },
                         children![
+                            p(ga, "height: "),
                             (
-                                Text::new("height: "),
-                                TextFont {
-                                    font: game_assets.mono_font.clone_weak(),
-                                    font_size: 20.0,
-                                    ..default()
-                                },
-                            ),
-                            (
-                                left_button(game_assets),
+                                left_button(ga),
                                 observe(
                                     |_: Trigger<Pointer<Click>>, mut config: ResMut<Config>, mut height_text: Query<&mut Text, With<HeightText>>| {
                                         config.grid_size.1 -= 1;
@@ -603,17 +531,9 @@ pub fn settings(game_assets: &GameAssets) -> impl Bundle {
                                     },
                                 )
                             ),
+                            (p(ga, " 6"), HeightText),
                             (
-                                Text::new(" 6"),
-                                TextFont {
-                                    font: game_assets.mono_font.clone_weak(),
-                                    font_size: 20.0,
-                                    ..default()
-                                },
-                                HeightText,
-                            ),
-                            (
-                                right_button(game_assets),
+                                right_button(ga),
                                 observe(
                                     |_: Trigger<Pointer<Click>>, mut config: ResMut<Config>, mut height_text: Query<&mut Text, With<HeightText>>| {
                                         config.grid_size.1 += 1;
@@ -635,14 +555,7 @@ pub fn settings(game_assets: &GameAssets) -> impl Bundle {
                     ..default()
                 },
                 children![
-                    (
-                        Text::new("Flash intensity"),
-                        TextFont {
-                            font: game_assets.bold_font.clone_weak(),
-                            font_size: 40.0,
-                            ..default()
-                        },
-                    ),
+                    h2(ga, "Flash intensity"),
                     (
                         Node {
                             display: Display::Flex,
@@ -651,7 +564,7 @@ pub fn settings(game_assets: &GameAssets) -> impl Bundle {
                         },
                         children![
                             (
-                                left_button(game_assets),
+                                left_button(ga),
                                 observe(
                                     |_: Trigger<Pointer<Click>>,
                                      mut flash_intensity: ResMut<FlashIntensity>,
@@ -664,17 +577,9 @@ pub fn settings(game_assets: &GameAssets) -> impl Bundle {
                                     },
                                 )
                             ),
+                            (p(ga, "0.3"), FlashIntensityText),
                             (
-                                Text::new("0.3"),
-                                TextFont {
-                                    font: game_assets.mono_font.clone_weak(),
-                                    font_size: 20.0,
-                                    ..default()
-                                },
-                                FlashIntensityText,
-                            ),
-                            (
-                                right_button(game_assets),
+                                right_button(ga),
                                 observe(
                                     |_: Trigger<Pointer<Click>>,
                                      mut flash_intensity: ResMut<FlashIntensity>,
@@ -691,7 +596,7 @@ pub fn settings(game_assets: &GameAssets) -> impl Bundle {
                     )
                 ]
             ),
-            back_to_main_menu::<SettingsUiTree>(game_assets)
+            back_to_main_menu::<SettingsUiTree>(ga)
         ],
     )
 }
