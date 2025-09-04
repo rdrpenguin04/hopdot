@@ -25,3 +25,7 @@ futures = { version = "0.3.31", default-features = false, features = [
     "alloc",
     "async-await",
 ] }
+bevy = { workspace = true, features = ["bevy_log", "std"] }
+bevy_defer.workspace = true
+argon2 = "0.5.3"
+check-if-email-exists = "0.9.1"

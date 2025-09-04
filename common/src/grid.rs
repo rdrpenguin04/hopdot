@@ -92,7 +92,7 @@ impl Drop for Grid {
 }
 
 impl Grid {
-    fn grid_inner(&self) -> &[GridCell] {
+    pub fn grid_inner(&self) -> &[GridCell] {
         unsafe { core::slice::from_raw_parts(self.grid.as_ptr(), self.len()) }
     }
 

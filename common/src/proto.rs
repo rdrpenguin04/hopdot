@@ -102,6 +102,13 @@ pub enum PlayerStatus {
     Normal,
     Elim,
     Resigned,
+    Disconnected,
+}
+
+#[derive(Encode, Decode, Copy, Clone, Debug, Hash, PartialEq, Eq)]
+pub enum GameStatus {
+    GameWon(NonZeroU8, WinReason),
+    GameDrawn(DrawReason),
 }
 
 #[derive(Encode, Decode, Clone, Debug, Hash, PartialEq, Eq)]
@@ -121,6 +128,22 @@ pub enum GamePacket {
     SProposalAccepted(ProposalType),
     SProposalRefused(ProposalType),
     SPlayerStatus(NonZeroU8, PlayerStatus),
+    SGameStatus(GameStatus),
+}
+
+#[derive(Encode, Decode, Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub enum WinReason {
+    Elim,
+    Resign,
+    Award,
+    Time,
+}
+
+#[derive(Encode, Decode, Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub enum DrawReason {
+    Agreement,
+    Progress,
+    Time,
 }
 
 #[derive(Encode, Decode, Clone, Copy, Debug, Hash, PartialEq, Eq)]
