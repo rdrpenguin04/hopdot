@@ -105,7 +105,7 @@ pub enum PlayerStatus {
     Disconnected,
 }
 
-#[derive(Encode, Decode, Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Encode, Decode, Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum GameStatus {
     GameWon(NonZeroU8, WinReason),
     GameDrawn(DrawReason),
