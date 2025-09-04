@@ -93,7 +93,7 @@ pub fn update_client_packets(
 }
 
 pub fn send_server_packets(
-    actors: Query<(&GameRef, &mut ActorWsHandler)>,
+    actors: Query<(&GameRef, &ActorWsHandler)>,
     game: Query<&GameBlob>,
     mut game_event: EventReader<StatusEvent>,
 ) {
@@ -101,7 +101,7 @@ pub fn send_server_packets(
         let gent = event.game_entity();
         let game = game.get(gent).unwrap();
 
-        for (gref, mut actor) in actors {
+        for (gref, actor) in &actors {
             if gref.0 != gent {
                 continue;
             }
