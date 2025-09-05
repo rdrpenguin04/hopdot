@@ -68,7 +68,7 @@ impl MenuState {
     fn action_for_menu(&self, prev: Option<&Self>, menu: Option<&Self>) -> FlyAction {
         use FlyAction::*;
         use FlyDirection::*;
-        
+
         match (self, prev, menu) {
             // Menu hasn't changed
             (_, y, z) if y == z => Stay,

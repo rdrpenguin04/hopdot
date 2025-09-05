@@ -626,11 +626,6 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
         },
     ));
 
-    commands.spawn(ui_menu::game_end(&game_assets));
-    commands.spawn(ui_menu::rules(&game_assets));
-    commands.spawn(ui_menu::settings(&game_assets));
-    commands.spawn(ui_menu::credits(&game_assets));
-
     commands.spawn((
         Mesh3d(game_assets.splash_mesh.clone_weak()),
         MeshMaterial3d(game_assets.splash_material.clone_weak()),
