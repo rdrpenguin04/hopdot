@@ -17,7 +17,3 @@ chrono = { version = "0.4.41", features = ["serde"] }
 rand.workspace = true
 serde.workspace = true
 uuid.workspace = true
-bevy = { workspace = true, default-features = true, features = [
-    "experimental_pbr_pcss",
-    "flac",
-] }
