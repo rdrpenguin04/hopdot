@@ -44,6 +44,10 @@ impl CellState {
 
         Self((owner << 5) | count)
     }
+
+    pub fn inner(self) -> u8 {
+        self.0
+    }
 }
 
 #[derive(Encode, Decode, Copy, Clone, Debug, Hash, PartialEq, Eq)]
