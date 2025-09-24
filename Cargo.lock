@@ -2352,7 +2352,6 @@ name = "common"
 version = "1.2.3"
 dependencies = [
  "ahash",
- "bevy",
  "bincode",
  "bytemuck",
  "chrono",
