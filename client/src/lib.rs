@@ -252,23 +252,21 @@ pub fn main() {
         app.add_plugins(TemporalAntiAliasPlugin);
     }
 
-    // #[cfg(debug_assertions)]
-    // {
-    //     use bevy_inspector_egui::{
-    //         bevy_egui::EguiPlugin,
-    //         quick::{StateInspectorPlugin, WorldInspectorPlugin},
-    //     };
+    #[cfg(feature = "dev")]
+    {
+        use bevy_inspector_egui::{
+            bevy_egui::EguiPlugin,
+            quick::{StateInspectorPlugin, WorldInspectorPlugin},
+        };
 
-    //     app.add_plugins((
-    //         EguiPlugin {
-    //             enable_multipass_for_primary_context: true,
-    //         },
-    //         StateInspectorPlugin::<MainState>::default(),
-    //         StateInspectorPlugin::<CurrentTurn>::default(),
-    //         StateInspectorPlugin::<NeedNewBoard>::default(),
-    //         WorldInspectorPlugin::default(),
-    //     ));
-    // }
+        app.add_plugins((
+            EguiPlugin::default(),
+            StateInspectorPlugin::<MainState>::default(),
+            StateInspectorPlugin::<CurrentTurn>::default(),
+            StateInspectorPlugin::<NeedNewBoard>::default(),
+            WorldInspectorPlugin::default(),
+        ));
+    }
 
     app.init_resource::<GameAssets>()
         .init_resource::<VisualGrid>()

@@ -6,9 +6,7 @@ use bevy::{
 };
 
 use crate::{
-    MainState, add_hover_observers,
-    anim::{SmoothingSettings, TargetTransform, TargetUiOpacity},
-    ui_menu::{CreditsUiTree, RulesUiTree, SettingsUiTree},
+    add_hover_observers, anim::{SmoothingSettings, TargetTransform, TargetUiOpacity}, ui_menu::{CreditsUiTree, CustomGameSetupUiTree, RulesUiTree, SettingsUiTree}, MainState
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect)]
@@ -174,6 +172,18 @@ fn insert_menu_element(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
                      mut ui_opacity: ResMut<TargetUiOpacity>| {
                         next_state.set(MainState::DimForUi);
                         *settings_ui_tree.single_mut().unwrap() = Visibility::Visible;
+                        ui_opacity.0 = 1.0;
+                    },
+                );
+            }
+            "custom-setup" => {
+                entity_commands.observe(
+                    |_: Trigger<Pointer<Click>>,
+                     mut next_state: ResMut<NextState<MainState>>,
+                     mut game_setup_ui_tree: Query<&mut Visibility, With<CustomGameSetupUiTree>>,
+                     mut ui_opacity: ResMut<TargetUiOpacity>| {
+                        next_state.set(MainState::DimForUi);
+                        *game_setup_ui_tree.single_mut().unwrap() = Visibility::Visible;
                         ui_opacity.0 = 1.0;
                     },
                 );

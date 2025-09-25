@@ -22,11 +22,10 @@ tracing = { version = "*", features = [
     "release_max_level_warn",
 ] }
 common.workspace = true
+bevy-inspector-egui = { version = "0.33.1", optional = true }
 
 [features]
-default = ["dev_native"]
-dev = []
-dev_native = []
+dev = ["bevy-inspector-egui"]
 
 [target.wasm32-unknown-unknown.dependencies]
 getrandom = { version = "0.3", features = ["wasm_js"] }
@@ -37,3 +36,6 @@ type_complexity = "allow"
 
 [lib]
 crate-type = ["lib", "cdylib"]
+
+[package.metadata.bevy_cli.dev]
+features = ["dev"]

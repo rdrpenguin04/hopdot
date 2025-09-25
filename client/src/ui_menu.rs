@@ -1,6 +1,7 @@
 mod support;
 
 mod credits;
+mod custom_game_setup;
 mod game_end;
 mod rules;
 mod settings;
@@ -11,6 +12,9 @@ use crate::{Config, GameAssets, PlayerConfigEntry, SimpleConfig, ui_menu::rules:
 
 #[derive(Component)]
 pub struct CreditsUiTree;
+
+#[derive(Component)]
+pub struct CustomGameSetupUiTree;
 
 #[derive(Component)]
 pub struct GameEndUiTree;
@@ -28,6 +32,7 @@ pub fn plugin(app: &mut App) {
     app.insert_resource(RulesPageNumber(1))
         .add_systems(Update, (update_config_from_buttons, update_ui_scale))
         .add_systems(Startup, |mut commands: Commands, ga: Res<GameAssets>| {
+            commands.spawn(custom_game_setup::menu(&ga));
             commands.spawn(game_end::menu(&ga));
             commands.spawn(rules::menu(&ga));
             commands.spawn(settings::menu(&ga));
