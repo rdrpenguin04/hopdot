@@ -36,7 +36,7 @@ pub fn menu(ga: &GameAssets) -> impl Bundle {
                             margin: UiRect::top(Val::Px(20.0)),
                             display: Display::Flex,
                             flex_direction: FlexDirection::Row,
-                            height: Val::Percent(100.0),
+                            align_items: AlignItems::Center,
                             ..default()
                         },
                         children![
