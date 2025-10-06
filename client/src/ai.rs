@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use bevy::prelude::*;
 use bevy_prng::WyRand;
-use bevy_rand::global::GlobalEntropy;
+use bevy_rand::global::GlobalRng;
 use common::{
     ai::{Ai, Easiest, Easy, Hard, Medium},
     grid::Grid,
@@ -19,7 +19,7 @@ pub fn tick_ai(
     grid: Res<VisualGrid>,
     mut cells: Query<(&DotCell, &mut CellColor, &Transform)>,
     game_assets: Res<GameAssets>,
-    mut rng: GlobalEntropy<WyRand>,
+    mut rng: Single<&mut WyRand, With<GlobalRng>>,
     time: Res<Time>,
     mut timer: Local<Timer>,
     grid_tray: Query<Entity, With<GridTray>>,
@@ -76,7 +76,7 @@ pub fn tick_ai(
     let cell = ai.tick(&simple_grid, current_player.0 as u8, &mut rng);
 
     timer.tick(time.delta());
-    if !timer.finished() {
+    if !timer.is_finished() {
         return;
     }
 

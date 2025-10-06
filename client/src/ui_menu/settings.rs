@@ -40,7 +40,7 @@ pub fn menu(ga: &GameAssets) -> impl Bundle {
                             (
                                 left_button(ga),
                                 observe(
-                                    |_: Trigger<Pointer<Click>>,
+                                    |_: On<Pointer<Click>>,
                                      mut flash_intensity: ResMut<FlashIntensity>,
                                      mut flash_intensity_text: Query<&mut Text, With<FlashIntensityText>>| {
                                         flash_intensity.0 -= 0.1;
@@ -55,7 +55,7 @@ pub fn menu(ga: &GameAssets) -> impl Bundle {
                             (
                                 right_button(ga),
                                 observe(
-                                    |_: Trigger<Pointer<Click>>,
+                                    |_: On<Pointer<Click>>,
                                      mut flash_intensity: ResMut<FlashIntensity>,
                                      mut flash_intensity_text: Query<&mut Text, With<FlashIntensityText>>| {
                                         flash_intensity.0 += 0.1;

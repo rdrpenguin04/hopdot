@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 
-use crate::{ui_menu::{BotLevelSwitch, PlayModeSwitch}, Config};
+use crate::{
+    Config,
+    ui_menu::{BotLevelSwitch, PlayModeSwitch},
+};
 
 use super::{CustomGameSetupUiTree, support::*};
 
@@ -67,7 +70,7 @@ pub fn menu(ga: &GameAssets) -> impl Bundle {
                                 },
                                 Text::new("last level coming soon"),
                                 TextFont {
-                                    font: ga.mono_font.clone_weak(),
+                                    font: ga.mono_font.clone(),
                                     font_size: 8.0,
                                     ..default()
                                 },
@@ -97,7 +100,7 @@ pub fn menu(ga: &GameAssets) -> impl Bundle {
                             (
                                 left_button(ga),
                                 observe(
-                                    |_: Trigger<Pointer<Click>>, mut config: ResMut<Config>, mut width_text: Query<&mut Text, With<WidthText>>| {
+                                    |_: On<Pointer<Click>>, mut config: ResMut<Config>, mut width_text: Query<&mut Text, With<WidthText>>| {
                                         config.grid_size.0 -= 1;
                                         if config.grid_size.0 < 1 {
                                             config.grid_size.0 = 1;
@@ -110,7 +113,7 @@ pub fn menu(ga: &GameAssets) -> impl Bundle {
                             (
                                 right_button(ga),
                                 observe(
-                                    |_: Trigger<Pointer<Click>>, mut config: ResMut<Config>, mut width_text: Query<&mut Text, With<WidthText>>| {
+                                    |_: On<Pointer<Click>>, mut config: ResMut<Config>, mut width_text: Query<&mut Text, With<WidthText>>| {
                                         config.grid_size.0 += 1;
                                         if config.grid_size.0 > 20 {
                                             config.grid_size.0 = 20;
@@ -134,7 +137,7 @@ pub fn menu(ga: &GameAssets) -> impl Bundle {
                             (
                                 left_button(ga),
                                 observe(
-                                    |_: Trigger<Pointer<Click>>, mut config: ResMut<Config>, mut height_text: Query<&mut Text, With<HeightText>>| {
+                                    |_: On<Pointer<Click>>, mut config: ResMut<Config>, mut height_text: Query<&mut Text, With<HeightText>>| {
                                         config.grid_size.1 -= 1;
                                         if config.grid_size.1 < 1 {
                                             config.grid_size.1 = 1;
@@ -147,7 +150,7 @@ pub fn menu(ga: &GameAssets) -> impl Bundle {
                             (
                                 right_button(ga),
                                 observe(
-                                    |_: Trigger<Pointer<Click>>, mut config: ResMut<Config>, mut height_text: Query<&mut Text, With<HeightText>>| {
+                                    |_: On<Pointer<Click>>, mut config: ResMut<Config>, mut height_text: Query<&mut Text, With<HeightText>>| {
                                         config.grid_size.1 += 1;
                                         if config.grid_size.1 > 20 {
                                             config.grid_size.1 = 20;
@@ -160,6 +163,6 @@ pub fn menu(ga: &GameAssets) -> impl Bundle {
                     )
                 ]
             ),
-        ]
+        ],
     )
 }

@@ -1,12 +1,11 @@
 use std::time::Duration;
 
-use bevy::{
-    ecs::{component::HookContext, world::DeferredWorld},
-    prelude::*,
-};
+use bevy::{ecs::{lifecycle::HookContext, world::DeferredWorld}, prelude::*};
 
 use crate::{
-    add_hover_observers, anim::{SmoothingSettings, TargetTransform, TargetUiOpacity}, ui_menu::{CreditsUiTree, CustomGameSetupUiTree, RulesUiTree, SettingsUiTree}, MainState
+    MainState, add_hover_observers,
+    anim::{SmoothingSettings, TargetTransform, TargetUiOpacity},
+    ui_menu::{CreditsUiTree, CustomGameSetupUiTree, RulesUiTree, SettingsUiTree},
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect)]
@@ -142,7 +141,7 @@ fn insert_menu_element(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
         match action {
             "credits" => {
                 entity_commands.observe(
-                    |_: Trigger<Pointer<Click>>,
+                    |_: On<Pointer<Click>>,
                      mut next_state: ResMut<NextState<MainState>>,
                      mut credits_ui_tree: Query<&mut Visibility, With<CreditsUiTree>>,
                      mut ui_opacity: ResMut<TargetUiOpacity>| {
@@ -154,7 +153,7 @@ fn insert_menu_element(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
             }
             "rules" => {
                 entity_commands.observe(
-                    |_: Trigger<Pointer<Click>>,
+                    |_: On<Pointer<Click>>,
                      mut next_state: ResMut<NextState<MainState>>,
                      mut settings_ui_tree: Query<&mut Visibility, With<RulesUiTree>>,
                      mut ui_opacity: ResMut<TargetUiOpacity>| {
@@ -166,7 +165,7 @@ fn insert_menu_element(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
             }
             "settings" => {
                 entity_commands.observe(
-                    |_: Trigger<Pointer<Click>>,
+                    |_: On<Pointer<Click>>,
                      mut next_state: ResMut<NextState<MainState>>,
                      mut settings_ui_tree: Query<&mut Visibility, With<SettingsUiTree>>,
                      mut ui_opacity: ResMut<TargetUiOpacity>| {
@@ -178,7 +177,7 @@ fn insert_menu_element(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
             }
             "custom-setup" => {
                 entity_commands.observe(
-                    |_: Trigger<Pointer<Click>>,
+                    |_: On<Pointer<Click>>,
                      mut next_state: ResMut<NextState<MainState>>,
                      mut game_setup_ui_tree: Query<&mut Visibility, With<CustomGameSetupUiTree>>,
                      mut ui_opacity: ResMut<TargetUiOpacity>| {
@@ -189,10 +188,10 @@ fn insert_menu_element(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
                 );
             }
             "start-game" => {
-                entity_commands.observe(|_: Trigger<Pointer<Click>>, mut next_menu: ResMut<NextState<MenuState>>| {
+                entity_commands.observe(|_: On<Pointer<Click>>, mut next_menu: ResMut<NextState<MenuState>>| {
                     next_menu.set(MenuState::Main(Some(MainMenuSubState::StartGame)));
                 });
-                // entity_commands.observe(|_: Trigger<Pointer<Click>>, mut next_state: ResMut<NextState<MainState>>| {
+                // entity_commands.observe(|_: On<Pointer<Click>>, mut next_state: ResMut<NextState<MainState>>| {
                 //     next_state.set(MainState::Game);
                 // });
             }

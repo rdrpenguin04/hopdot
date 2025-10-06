@@ -1,6 +1,6 @@
 use bevy::{
     math::{Mat4, Vec3A, Vec4},
-    render::camera::{CameraProjection, PerspectiveProjection, SubCameraView},
+    camera::{CameraProjection, PerspectiveProjection, SubCameraView},
 };
 
 #[derive(Clone, Debug, Default)]

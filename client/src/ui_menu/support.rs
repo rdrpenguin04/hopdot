@@ -1,12 +1,13 @@
 use bevy::prelude::*;
-use bevy_defer::{AsyncAccess as _, AsyncCommandsExtension as _, AsyncWorld, fetch};
+use bevy_defer::{AsyncCommandsExtension as _, AsyncWorld, fetch};
 
 use crate::MainState;
 pub use crate::{
     GameAssets,
     anim::{AnimateBackgroundColor, TargetUiOpacity},
-    observe::observe,
 };
+
+pub use bevy::ui_widgets::observe;
 
 pub fn back_to_main_menu<T: Component>(ga: &GameAssets) -> impl Bundle {
     (
@@ -19,7 +20,7 @@ pub fn back_to_main_menu<T: Component>(ga: &GameAssets) -> impl Bundle {
         Outline::new(Val::Px(5.0), Val::Px(5.0), Color::WHITE),
         BorderRadius::all(Val::Px(5.0)),
         observe(
-            |_: Trigger<Pointer<Click>>,
+            |_: On<Pointer<Click>>,
              mut commands: Commands,
              mut next_state: ResMut<NextState<MainState>>,
              mut ui_opacity: ResMut<TargetUiOpacity>,
@@ -41,7 +42,7 @@ pub fn h1(ga: &GameAssets, text: impl Into<String>) -> impl Bundle {
     (
         Text::new(text),
         TextFont {
-            font: ga.bold_font.clone_weak(),
+            font: ga.bold_font.clone(),
             font_size: 60.0,
             ..default()
         },
@@ -52,7 +53,7 @@ pub fn h2(ga: &GameAssets, text: impl Into<String>) -> impl Bundle {
     (
         Text::new(text),
         TextFont {
-            font: ga.bold_font.clone_weak(),
+            font: ga.bold_font.clone(),
             font_size: 40.0,
             ..default()
         },
@@ -63,7 +64,7 @@ pub fn p(ga: &GameAssets, text: impl Into<String>) -> impl Bundle {
     (
         Text::new(text),
         TextFont {
-            font: ga.mono_font.clone_weak(),
+            font: ga.mono_font.clone(),
             font_size: 20.0,
             ..default()
         },
@@ -85,7 +86,7 @@ pub fn button_with_bg(ga: &GameAssets, text: impl Into<String>, color: Color) ->
         children![(
             Text::new(text),
             TextFont {
-                font: ga.mono_font.clone_weak(),
+                font: ga.mono_font.clone(),
                 font_size: 15.0,
                 ..default()
             },

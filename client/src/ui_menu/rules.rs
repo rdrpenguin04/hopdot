@@ -63,7 +63,7 @@ pub fn menu(ga: &GameAssets) -> impl Bundle {
                     (
                         left_button(ga),
                         observe(
-                            |_: Trigger<Pointer<Click>>,
+                            |_: On<Pointer<Click>>,
                              mut rules_page_number: ResMut<RulesPageNumber>,
                              mut page_num_text: Query<&mut Text, With<RulesPageNumberText>>,
                              mut rules_text: Query<&mut Text, (With<RulesText>, Without<RulesPageNumberText>)>| {
@@ -80,7 +80,7 @@ pub fn menu(ga: &GameAssets) -> impl Bundle {
                     (
                         right_button(ga),
                         observe(
-                            |_: Trigger<Pointer<Click>>,
+                            |_: On<Pointer<Click>>,
                              mut rules_page_number: ResMut<RulesPageNumber>,
                              mut page_num_text: Query<&mut Text, With<RulesPageNumberText>>,
                              mut rules_text: Query<&mut Text, (With<RulesText>, Without<RulesPageNumberText>)>| {

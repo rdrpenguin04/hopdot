@@ -1,8 +1,6 @@
 pub mod ai;
 pub mod anim;
-pub mod bundle_fn;
 pub mod menu;
-pub mod observe;
 pub mod projection;
 pub mod ui_menu;
 
@@ -13,16 +11,8 @@ use std::{
 
 use bevy::audio::Volume;
 #[allow(unused_imports)] // WASM
-use bevy::{
-    core_pipeline::{
-        bloom::Bloom,
-        experimental::taa::{TemporalAntiAliasPlugin, TemporalAntiAliasing},
-    },
-    pbr::ShadowFilteringMethod,
-    platform::collections::HashSet,
-    prelude::*,
-};
-use bevy_defer::{AsyncAccess, AsyncCommandsExtension, AsyncPlugin, AsyncWorld, fetch};
+use bevy::{anti_alias::taa::TemporalAntiAliasing, light::ShadowFilteringMethod, platform::collections::HashSet, post_process::bloom::Bloom, prelude::*};
+use bevy_defer::{AsyncCommandsExtension, AsyncPlugin, AsyncWorld, fetch};
 use bevy_prng::WyRand;
 use bevy_rand::plugin::EntropyPlugin;
 use bevy_skein::SkeinPlugin;
@@ -246,11 +236,6 @@ pub fn main() {
     .add_plugins(anim::plugin)
     .add_plugins(menu::plugin)
     .add_plugins(ui_menu::plugin);
-
-    #[cfg(not(target_family = "wasm"))]
-    {
-        app.add_plugins(TemporalAntiAliasPlugin);
-    }
 
     #[cfg(feature = "dev")]
     {
@@ -531,8 +516,8 @@ fn fly_to_menu(
 
 fn spawn_dot(x: f32, z: f32, game_assets: &GameAssets) -> impl Bundle {
     (
-        Mesh3d(game_assets.dot_mesh.clone_weak()),
-        MeshMaterial3d(game_assets.dot_color.clone_weak()),
+        Mesh3d(game_assets.dot_mesh.clone()),
+        MeshMaterial3d(game_assets.dot_color.clone()),
         Transform::from_xyz(x, 1.0, z).with_scale(Vec3::ZERO),
         SmoothingSettings {
             translation_decay_rate: 8.0,
@@ -554,7 +539,7 @@ fn spawn_cell(
 ) -> Entity {
     commands
         .spawn((
-            Mesh3d(game_assets.tile_mesh.clone_weak()),
+            Mesh3d(game_assets.tile_mesh.clone()),
             MeshMaterial3d(materials.add(GRAY)),
             Transform::from_xyz(x, -0.15, z),
             TargetTransform(Transform::from_xyz(x, -0.15, z)),
@@ -569,16 +554,16 @@ fn spawn_cell(
             ]),
             DotCellMeta { capacity },
         ))
-        .observe(|trigger: Trigger<Pointer<Over>>, mut targets: Query<&mut TargetTransform>| {
-            let mut target = targets.get_mut(trigger.target).unwrap();
+        .observe(|trigger: On<Pointer<Over>>, mut targets: Query<&mut TargetTransform>| {
+            let mut target = targets.get_mut(trigger.original_event_target()).unwrap();
             target.scale = Vec3::splat(1.05);
         })
-        .observe(|trigger: Trigger<Pointer<Out>>, mut targets: Query<&mut TargetTransform>| {
-            let mut target = targets.get_mut(trigger.target).unwrap();
+        .observe(|trigger: On<Pointer<Out>>, mut targets: Query<&mut TargetTransform>| {
+            let mut target = targets.get_mut(trigger.original_event_target()).unwrap();
             target.scale = Vec3::splat(1.0);
         })
         .observe(
-            move |trigger: Trigger<Pointer<Click>>,
+            move |trigger: On<Pointer<Click>>,
                   mut commands: Commands,
                   mut colors: Query<&mut CellColor>,
                   game_assets: Res<GameAssets>,
@@ -589,11 +574,11 @@ fn spawn_cell(
                 if let (Some(state), Some(mut next_state), Some(current_turn)) = (state, next_state, current_turn)
                     && *state == GameOperation::Human
                 {
-                    let mut color = colors.get_mut(trigger.target).unwrap();
+                    let mut color = colors.get_mut(trigger.original_event_target()).unwrap();
                     if color.player == 0 || color.player == current_turn.0 {
                         color.player = current_turn.0;
                         commands
-                            .entity(trigger.target)
+                            .entity(trigger.original_event_target())
                             .with_related::<Dot>((spawn_dot(x, z, &game_assets), ChildOf(grid_tray.single().unwrap())));
                         next_state.set(GameOperation::Animating);
                     }
@@ -606,17 +591,17 @@ fn spawn_cell(
 fn add_hover_observers(entity_commands: &mut EntityCommands) {
     let id = entity_commands.id();
     entity_commands
-        .observe(move |_: Trigger<Pointer<Over>>, mut targets: Query<&mut TargetTransform>| {
+        .observe(move |_: On<Pointer<Over>>, mut targets: Query<&mut TargetTransform>| {
             targets.get_mut(id).unwrap().scale = Vec3::splat(1.05);
         })
-        .observe(move |_: Trigger<Pointer<Out>>, mut targets: Query<&mut TargetTransform>| {
+        .observe(move |_: On<Pointer<Out>>, mut targets: Query<&mut TargetTransform>| {
             targets.get_mut(id).unwrap().scale = Vec3::splat(1.0);
         });
 }
 
 fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_server: Res<AssetServer>) {
     commands.spawn((
-        AudioPlayer(game_assets.bump_sfx.clone_weak()),
+        AudioPlayer(game_assets.bump_sfx.clone()),
         BumpPlayer,
         PlaybackSettings {
             volume: Volume::Decibels(-6.0),
@@ -625,8 +610,8 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
     ));
 
     commands.spawn((
-        Mesh3d(game_assets.splash_mesh.clone_weak()),
-        MeshMaterial3d(game_assets.splash_material.clone_weak()),
+        Mesh3d(game_assets.splash_mesh.clone()),
+        MeshMaterial3d(game_assets.splash_material.clone()),
         Transform::from_xyz(0.0, 12.0, 8.0).looking_to(Dir3::NEG_Z, Dir3::Y),
         Splash,
     ));
@@ -653,7 +638,7 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
         Transform::from_xyz(0.0, 30.0, 0.0),
     ));
 
-    commands.spawn((SceneRoot(game_assets.table_scene.clone_weak()), Transform::from_xyz(0.0, -0.3, 0.0)));
+    commands.spawn((SceneRoot(game_assets.table_scene.clone()), Transform::from_xyz(0.0, -0.3, 0.0)));
 
     commands.spawn((
         PointLight {
@@ -690,12 +675,9 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
             commands.spawn((
                 Camera3d::default(),
                 Projection::custom(PerspectiveMinAspect::default()),
-                Camera { hdr: true, ..default() },
                 Transform::from_xyz(0.0, 12.0, 16.0).looking_to(Dir3::NEG_Z, Dir3::Y),
                 Msaa::Off,
-                #[cfg(not(target_family = "wasm"))]
                 TemporalAntiAliasing::default(),
-                #[cfg(not(target_family = "wasm"))]
                 ShadowFilteringMethod::Temporal,
                 TargetTransform(Transform::from_xyz(0.0, 12.0, 20.0).looking_to(Dir3::NEG_Z, Dir3::Y)),
                 SmoothingSettings {

@@ -27,4 +27,3 @@ pub fn menu(ga: &GameAssets) -> impl Bundle {
         ],
     )
 }
-

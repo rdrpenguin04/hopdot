@@ -37,7 +37,7 @@ pub fn menu(ga: &GameAssets) -> impl Bundle {
                     "© 2025 Lightning Creations. The Lightning Creations logo is a trademark of Lightning Creations and is used by permission of the LC Admins. For more information, visit https://lcdev.xyz"
                 ),
                 TextFont {
-                    font: ga.mono_font.clone_weak(),
+                    font: ga.mono_font.clone(),
                     font_size: 7.0,
                     ..default()
                 },
