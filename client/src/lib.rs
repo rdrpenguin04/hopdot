@@ -322,6 +322,19 @@ pub fn main() {
                 .run_if(in_state(MainState::Game)),
         )
         .add_systems(Update, run_splash)
+        .add_systems(
+            OnEnter(MainState::Splash),
+            |mut commands: Commands, mut ui_opacity: ResMut<TargetUiOpacity>, ui_trees: Query<Entity, (With<Node>, Without<ChildOf>)>| {
+                ui_opacity.0 = 0.0;
+                for ui_tree in &ui_trees {
+                    commands.spawn_task(move || async move {
+                        AsyncWorld.sleep(1.0).await;
+                        fetch!(ui_tree, Visibility).get_mut(|x| *x = Visibility::Hidden)?;
+                        Ok(())
+                    });
+                }
+            },
+        )
         .init_state::<MainState>()
         .init_state::<NeedNewBoard>()
         .init_state::<CurrentTurn>()
