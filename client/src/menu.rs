@@ -1,10 +1,13 @@
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
-use bevy::{ecs::{lifecycle::HookContext, world::DeferredWorld}, prelude::*};
+use bevy::{
+    ecs::{lifecycle::HookContext, world::DeferredWorld},
+    prelude::*,
+};
 
 use crate::{
     MainState, add_hover_observers,
-    anim::{SmoothingSettings, TargetTransform, TargetUiOpacity},
+    anim::{SmoothingSettings, TargetMaterialColor, TargetTransform, TargetUiOpacity},
     ui_menu::{CreditsUiTree, CustomGameSetupUiTree, RulesUiTree, SettingsUiTree},
 };
 
@@ -99,7 +102,7 @@ impl Default for MenuState {
     }
 }
 
-#[derive(Component, Default, Reflect)]
+#[derive(Clone, Component, Default, Reflect)]
 #[require(
     TargetTransform(Transform::default()),
     SmoothingSettings { translation_decay_rate: 3.0, scale_decay_rate: 10.0, ..default() },
@@ -126,6 +129,36 @@ impl MenuElement {
         }
     }
 }
+
+#[derive(Component, Default, Reflect)]
+#[reflect(Component, Default)]
+#[component(on_insert = insert_menu_radio)]
+pub struct MenuRadio {
+    pub option_name: String,
+    pub id: usize,
+}
+
+#[derive(Resource, Default, Reflect)]
+#[reflect(Resource, Default)]
+pub struct MenuRadios {
+    pub radios: HashMap<String, Option<usize>>,
+}
+
+const SELECTED_BACK: Color = Color::Srgba(Srgba::rgb(0.0, 1.0, 0.0));
+const DESELECTED_BACK: Color = Color::Srgba(Srgba::rgb(0.0, 0.0, 1.0));
+const DISABLED_BACK: Color = Color::Srgba(Srgba::rgb(0.4, 0.4, 0.45));
+
+const SELECTED_TEXT: Color = Color::Srgba(Srgba::rgb(0.0, 0.0, 1.0));
+const DESELECTED_TEXT: Color = Color::Srgba(Srgba::rgb(0.0, 1.0, 0.0));
+const DISABLED_TEXT: Color = Color::Srgba(Srgba::rgb(0.2, 0.2, 0.25));
+
+#[derive(Component)]
+#[require(TargetMaterialColor = TargetMaterialColor(DESELECTED_BACK))]
+pub struct MenuRadioBack(pub MenuRadio);
+
+#[derive(Component)]
+#[require(TargetMaterialColor = TargetMaterialColor(DESELECTED_TEXT))]
+pub struct MenuRadioText(pub MenuRadio);
 
 fn insert_menu_element(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
     let transform = *world.get(entity).unwrap();
@@ -202,6 +235,40 @@ fn insert_menu_element(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
     }
 }
 
+fn insert_menu_radio(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
+    let menu_radio = world.get::<MenuRadio>(entity).unwrap();
+    let option_name = menu_radio.option_name.clone();
+    let id = menu_radio.id;
+    world
+        .get_resource_mut::<MenuRadios>()
+        .unwrap()
+        .radios
+        .entry(option_name.clone())
+        .or_insert(Some(0));
+    let children = world.get::<Children>(entity).unwrap().iter().collect::<Vec<_>>();
+    for (i, child) in children.into_iter().enumerate() {
+        let is_text = i == 1; // Dirty hack because the components that *would* let us check accurately don't exist yet :)
+        let mut commands = world.commands();
+        let menu_radio = MenuRadio {
+            option_name: option_name.clone(),
+            id,
+        };
+        if is_text {
+            commands.entity(child).insert(MenuRadioText(menu_radio));
+        } else {
+            commands.entity(child).insert(MenuRadioBack(menu_radio));
+        }
+    }
+    world
+        .commands()
+        .entity(entity)
+        .observe(move |_: On<Pointer<Click>>, mut menu_radios: ResMut<MenuRadios>| {
+            if let Some(x) = menu_radios.radios.get_mut(&option_name).unwrap().as_mut() {
+                *x = id;
+            }
+        });
+}
+
 fn switch_menus(
     cur_menu: Option<Res<State<MenuState>>>,
     mut prev_menu: Local<Option<MenuState>>,
@@ -253,6 +320,37 @@ fn cleanup_menus(
     *prev_menu = cur_menu.map(|x| **x);
 }
 
+fn animate_menu_radios(
+    menu_radio_backs: Query<(&mut TargetMaterialColor, &MenuRadioBack), Without<MenuRadioText>>,
+    menu_radio_texts: Query<(&mut TargetMaterialColor, &MenuRadioText), Without<MenuRadioBack>>,
+    menu_radios: Res<MenuRadios>,
+) {
+    if menu_radios.is_changed() {
+        for (mut color, back) in menu_radio_backs {
+            if let Some(id) = menu_radios.radios[&back.0.option_name] {
+                if id == back.0.id {
+                    color.0 = SELECTED_BACK;
+                } else {
+                    color.0 = DESELECTED_BACK;
+                }
+            } else {
+                color.0 = DISABLED_BACK;
+            }
+        }
+        for (mut color, back) in menu_radio_texts {
+            if let Some(id) = menu_radios.radios[&back.0.option_name] {
+                if id == back.0.id {
+                    color.0 = SELECTED_TEXT;
+                } else {
+                    color.0 = DESELECTED_TEXT;
+                }
+            } else {
+                color.0 = DISABLED_TEXT;
+            }
+        }
+    }
+}
+
 pub fn plugin(app: &mut App) {
     app.add_systems(
         Update,
@@ -264,7 +362,11 @@ pub fn plugin(app: &mut App) {
         .run_if(in_state(MenuState::Pause)),
     )
     .add_systems(Update, switch_menus.run_if(state_changed::<MenuState>.or(state_changed::<MainState>)))
+    .add_systems(Update, animate_menu_radios)
     .add_systems(Update, cleanup_menus)
     .add_sub_state::<MenuState>()
-    .register_type::<MenuElement>();
+    .init_resource::<MenuRadios>()
+    .register_type::<MenuElement>()
+    .register_type::<MenuRadio>()
+    .register_type::<MenuRadios>();
 }

@@ -1,10 +1,13 @@
 use bevy::prelude::*;
 use bevy_defer::{AsyncCommandsExtension as _, AsyncWorld, fetch};
 
-use crate::MainState;
 pub use crate::{
     GameAssets,
     anim::{AnimateBackgroundColor, TargetUiOpacity},
+};
+use crate::{
+    MainState,
+    menu::{MainMenuSubState, MenuState},
 };
 
 pub use bevy::ui_widgets::observe;
@@ -23,9 +26,11 @@ pub fn back_to_main_menu<T: Component>(ga: &GameAssets) -> impl Bundle {
             |_: On<Pointer<Click>>,
              mut commands: Commands,
              mut next_state: ResMut<NextState<MainState>>,
+             mut next_menu_state: ResMut<NextState<MenuState>>,
              mut ui_opacity: ResMut<TargetUiOpacity>,
              ui_tree: Query<Entity, With<T>>| {
                 next_state.set(MainState::Menu);
+                next_menu_state.set(MenuState::Main(Some(MainMenuSubState::Main)));
                 ui_opacity.0 = 0.0;
                 let ui_tree = ui_tree.single().unwrap();
                 commands.spawn_task(move || async move {

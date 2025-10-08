@@ -18,7 +18,7 @@ use bevy_rand::plugin::EntropyPlugin;
 use bevy_skein::SkeinPlugin;
 
 use crate::{
-    anim::{Bouncing, SmoothingSettings, TargetTransform, TargetUiOpacity},
+    anim::{Bouncing, SmoothingSettings, TargetMaterialColor, TargetTransform, TargetUiOpacity},
     menu::{MenuElement, MenuState},
     projection::PerspectiveMinAspect,
     ui_menu::{GameEndText, GameEndUiTree},
@@ -81,6 +81,8 @@ impl FromWorld for GameAssets {
 }
 
 #[derive(Clone, Component, Copy, Default, Reflect)]
+#[require(TargetMaterialColor)]
+#[reflect(Component)]
 pub struct CellColor {
     player: usize, // 0 = off, 1 = player 1, etc
 }
@@ -217,6 +219,14 @@ pub struct FlashIntensity(f32);
 #[derive(Resource)]
 pub struct SimpleConfig(usize, usize); // TODO: replace this with the actual config
 
+const TABLE_BASE_COLOR: Color = Color::Srgba(Srgba::rgb(0.904, 0.943, 1.0));
+const TABLE_DARK_COLOR: Color = Color::Srgba(Srgba::rgb(0.0, 0.005, 0.008));
+
+#[derive(Component, Reflect)]
+#[require(TargetMaterialColor = TargetMaterialColor(TABLE_BASE_COLOR))]
+#[reflect(Component)]
+pub struct TableMaterial;
+
 #[bevy_main]
 pub fn main() {
     let mut app = App::new();
@@ -294,16 +304,28 @@ pub fn main() {
         .add_systems(Startup, setup_scene)
         .add_systems(OnEnter(MainState::Game), fly_in_game)
         .add_systems(OnExit(MainState::Game), fly_out_game)
-        .add_systems(OnEnter(MainState::DimForUi), |lights: Query<&mut PointLight>| {
-            for mut light in lights {
-                light.intensity = 0.0;
-            }
-        })
-        .add_systems(OnExit(MainState::DimForUi), |lights: Query<&mut PointLight>| {
-            for mut light in lights {
-                light.intensity = 1_000_000.0;
-            }
-        })
+        .add_systems(
+            OnEnter(MainState::DimForUi),
+            |lights: Query<&mut PointLight>, mut table_material: Query<&mut TargetMaterialColor, With<TableMaterial>>| {
+                for mut light in lights {
+                    light.intensity = 0.0;
+                }
+                if let Ok(mut x) = table_material.single_mut() {
+                    x.0 = TABLE_DARK_COLOR;
+                }
+            },
+        )
+        .add_systems(
+            OnExit(MainState::DimForUi),
+            |lights: Query<&mut PointLight>, mut table_material: Query<&mut TargetMaterialColor, With<TableMaterial>>| {
+                for mut light in lights {
+                    light.intensity = 1_000_000.0;
+                }
+                if let Ok(mut x) = table_material.single_mut() {
+                    x.0 = TABLE_BASE_COLOR;
+                }
+            },
+        )
         .add_systems(
             OnEnter(MainState::Menu),
             (fly_to_menu, |mut end_game: ResMut<NextState<EndGame>>| {
@@ -350,6 +372,7 @@ pub fn main() {
         .register_type::<Config>()
         .register_type::<SmoothingSettings>()
         .register_type::<TargetTransform>()
+        .register_type::<TableMaterial>()
         .run();
 }
 
