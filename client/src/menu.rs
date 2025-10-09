@@ -138,10 +138,41 @@ pub struct MenuRadio {
     pub id: usize,
 }
 
+#[derive(Clone, Copy, Reflect)]
+pub enum RadioState {
+    Enabled(usize),
+    Disabled(usize),
+}
+
+impl RadioState {
+    #[must_use]
+    pub const fn value(&self) -> usize {
+        match self {
+            Self::Enabled(x) | Self::Disabled(x) => *x,
+        }
+    }
+
+    #[must_use]
+    pub const fn value_opt(&self) -> Option<usize> {
+        match self {
+            Self::Enabled(x) => Some(*x),
+            Self::Disabled(_) => None,
+        }
+    }
+
+    pub const fn disable(&mut self) {
+        *self = Self::Disabled(self.value());
+    }
+
+    pub const fn enable(&mut self) {
+        *self = Self::Enabled(self.value());
+    }
+}
+
 #[derive(Resource, Default, Reflect)]
 #[reflect(Resource, Default)]
 pub struct MenuRadios {
-    pub radios: HashMap<String, Option<usize>>,
+    pub radios: HashMap<String, RadioState>,
 }
 
 const SELECTED_BACK: Color = Color::Srgba(Srgba::rgb(0.0, 1.0, 0.0));
@@ -230,6 +261,12 @@ fn insert_menu_element(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
                     next_state.set(MainState::Game);
                 });
             }
+            "main-menu" => {
+                entity_commands.observe(|_: On<Pointer<Click>>, mut next_menu: ResMut<NextState<MenuState>>| {
+                    next_menu.set(MenuState::Main(Some(MainMenuSubState::Main)));
+                });
+            }
+            "game-type-changed" | "game-difficulty-changed" => {}
             x => {
                 warn!("unknown action: {x}");
             }
@@ -246,7 +283,7 @@ fn insert_menu_radio(mut world: DeferredWorld, HookContext { entity, .. }: HookC
         .unwrap()
         .radios
         .entry(option_name.clone())
-        .or_insert(Some(0));
+        .or_insert(RadioState::Enabled(0));
     let children = world.get::<Children>(entity).unwrap().iter().collect::<Vec<_>>();
     for (i, child) in children.into_iter().enumerate() {
         let is_text = i == 1; // Dirty hack because the components that *would* let us check accurately don't exist yet :)
@@ -265,7 +302,7 @@ fn insert_menu_radio(mut world: DeferredWorld, HookContext { entity, .. }: HookC
         .commands()
         .entity(entity)
         .observe(move |_: On<Pointer<Click>>, mut menu_radios: ResMut<MenuRadios>| {
-            if let Some(x) = menu_radios.radios.get_mut(&option_name).unwrap().as_mut() {
+            if let RadioState::Enabled(x) = menu_radios.radios.get_mut(&option_name).unwrap() {
                 *x = id;
             }
         });
@@ -329,7 +366,7 @@ fn animate_menu_radios(
 ) {
     if menu_radios.is_changed() {
         for (mut color, back) in menu_radio_backs {
-            if let Some(id) = menu_radios.radios[&back.0.option_name] {
+            if let RadioState::Enabled(id) = menu_radios.radios[&back.0.option_name] {
                 if id == back.0.id {
                     color.0 = SELECTED_BACK;
                 } else {
@@ -340,7 +377,7 @@ fn animate_menu_radios(
             }
         }
         for (mut color, back) in menu_radio_texts {
-            if let Some(id) = menu_radios.radios[&back.0.option_name] {
+            if let RadioState::Enabled(id) = menu_radios.radios[&back.0.option_name] {
                 if id == back.0.id {
                     color.0 = SELECTED_TEXT;
                 } else {

@@ -216,9 +216,6 @@ impl<'a> IntoIterator for &'a VisualGrid {
 #[derive(Resource)]
 pub struct FlashIntensity(f32);
 
-#[derive(Resource)]
-pub struct SimpleConfig(usize, usize); // TODO: replace this with the actual config
-
 const TABLE_BASE_COLOR: Color = Color::Srgba(Srgba::rgb(0.904, 0.943, 1.0));
 const TABLE_DARK_COLOR: Color = Color::Srgba(Srgba::rgb(0.0, 0.005, 0.008));
 
@@ -271,7 +268,6 @@ pub fn main() {
         })
         .insert_resource(ClearColor(Color::srgb_u8(33, 34, 37)))
         .insert_resource(FlashIntensity(0.3))
-        .insert_resource(SimpleConfig(1, 0))
         .insert_resource(Config {
             players: vec![
                 PlayerConfigEntry::Human {

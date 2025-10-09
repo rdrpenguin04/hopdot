@@ -8,7 +8,7 @@ mod settings;
 
 use bevy::{prelude::*, window::PrimaryWindow};
 
-use crate::{Config, GameAssets, PlayerConfigEntry, SimpleConfig, ui_menu::rules::RulesPageNumber};
+use crate::{Config, GameAssets, PlayerConfigEntry, menu::MenuRadios, ui_menu::rules::RulesPageNumber};
 
 #[derive(Component)]
 pub struct CreditsUiTree;
@@ -55,49 +55,25 @@ fn update_ui_scale(mut ui_scale: ResMut<UiScale>, windows: Query<&Window, With<P
     };
 }
 
-#[derive(Component)]
-struct PlayModeSwitch(usize);
-
-#[derive(Component)]
-struct BotLevelSwitch(usize);
-
-fn update_config_from_buttons(
-    mut buttons: ParamSet<(
-        Query<(&PlayModeSwitch, &mut BackgroundColor, Ref<Interaction>)>,
-        Query<(&BotLevelSwitch, &mut BackgroundColor, Ref<Interaction>)>,
-    )>,
-    mut simple_config: ResMut<SimpleConfig>,
-    mut config: ResMut<Config>,
-) {
-    let mut play_mode = simple_config.0;
-    for (id, _, int) in buttons.p0().iter() {
-        if int.is_changed() && *int == Interaction::Pressed {
-            play_mode = id.0;
-        }
+// play modes are:
+// * PvP: 1
+// * PvB: 0 (default)
+// * BvB: 2
+// * Custom: 3
+fn update_config_from_buttons(mut radios: ResMut<MenuRadios>, mut config: ResMut<Config>) {
+    let Some(play_mode) = radios.radios.get("game-type").map(|x| x.value()) else {
+        return;
+    };
+    let Some(bot_level_radio) = radios.radios.get_mut("game-difficulty") else {
+        return;
+    };
+    if play_mode == 1 || play_mode == 3 {
+        bot_level_radio.disable();
+    } else {
+        bot_level_radio.enable();
     }
-    simple_config.0 = play_mode;
-    for (id, mut color, _) in buttons.p0().iter_mut() {
-        color.0 = if id.0 == play_mode {
-            Color::srgba(0.4, 0.4, 0.4, color.0.alpha())
-        } else {
-            Color::srgba(0.2, 0.2, 0.2, color.0.alpha())
-        };
-    }
-    let mut bot_level = simple_config.1;
-    for (id, _, int) in buttons.p1().iter() {
-        if int.is_changed() && *int == Interaction::Pressed {
-            bot_level = id.0;
-        }
-    }
-    simple_config.1 = bot_level;
-    for (id, mut color, _) in buttons.p1().iter_mut() {
-        color.0 = if id.0 == bot_level {
-            Color::srgba(0.4, 0.4, 0.4, color.0.alpha())
-        } else {
-            Color::srgba(0.2, 0.2, 0.2, color.0.alpha())
-        };
-    }
-    if simple_config.is_changed() {
+    let bot_level = bot_level_radio.value();
+    if play_mode != 3 {
         config.players = vec![
             if play_mode == 2 {
                 PlayerConfigEntry::Bot {
@@ -110,7 +86,7 @@ fn update_config_from_buttons(
                     name: "Player 1".into(),
                 }
             },
-            if play_mode == 0 {
+            if play_mode == 1 {
                 PlayerConfigEntry::Human {
                     color: Color::srgb(0.0, 0.0, 1.0),
                     name: "Player 2".into(),
@@ -122,6 +98,8 @@ fn update_config_from_buttons(
                 }
             },
         ];
+    } else {
+        // TODO: read from expanded custom config
     }
     // config.players = vec![
     //     PlayerConfigEntry::Human {
