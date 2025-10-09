@@ -224,9 +224,11 @@ fn insert_menu_element(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
                 entity_commands.observe(|_: On<Pointer<Click>>, mut next_menu: ResMut<NextState<MenuState>>| {
                     next_menu.set(MenuState::Main(Some(MainMenuSubState::StartGame)));
                 });
-                // entity_commands.observe(|_: On<Pointer<Click>>, mut next_state: ResMut<NextState<MainState>>| {
-                //     next_state.set(MainState::Game);
-                // });
+            }
+            "go" => {
+                entity_commands.observe(|_: On<Pointer<Click>>, mut next_state: ResMut<NextState<MainState>>| {
+                    next_state.set(MainState::Game);
+                });
             }
             x => {
                 warn!("unknown action: {x}");
