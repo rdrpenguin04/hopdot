@@ -13,24 +13,28 @@ use crate::{
 pub use bevy::ui_widgets::observe;
 
 pub fn back_to_main_menu<T: Component>(ga: &GameAssets) -> impl Bundle {
+    back_to_menu::<T>(ga, "Back to main menu", MenuState::Main(Some(MainMenuSubState::Main)))
+}
+
+pub fn back_to_menu<T: Component>(ga: &GameAssets, text: &'static str, menu: MenuState) -> impl Bundle {
     (
         Node {
             margin: UiRect::top(Val::Px(20.0)),
             ..default()
         },
         Button,
-        p(ga, "Back to main menu"),
+        p(ga, text),
         Outline::new(Val::Px(5.0), Val::Px(5.0), Color::WHITE),
         BorderRadius::all(Val::Px(5.0)),
         observe(
-            |_: On<Pointer<Click>>,
-             mut commands: Commands,
-             mut next_state: ResMut<NextState<MainState>>,
-             mut next_menu_state: ResMut<NextState<MenuState>>,
-             mut ui_opacity: ResMut<TargetUiOpacity>,
-             ui_tree: Query<Entity, With<T>>| {
+            move |_: On<Pointer<Click>>,
+                  mut commands: Commands,
+                  mut next_state: ResMut<NextState<MainState>>,
+                  mut next_menu_state: ResMut<NextState<MenuState>>,
+                  mut ui_opacity: ResMut<TargetUiOpacity>,
+                  ui_tree: Query<Entity, With<T>>| {
                 next_state.set(MainState::Menu);
-                next_menu_state.set(MenuState::Main(Some(MainMenuSubState::Main)));
+                next_menu_state.set(menu);
                 ui_opacity.0 = 0.0;
                 let ui_tree = ui_tree.single().unwrap();
                 commands.spawn_task(move || async move {

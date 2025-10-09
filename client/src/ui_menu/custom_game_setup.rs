@@ -1,8 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    Config,
-    ui_menu::{BotLevelSwitch, PlayModeSwitch},
+    menu::{MainMenuSubState, MenuState}, ui_menu::{BotLevelSwitch, PlayModeSwitch}, Config
 };
 
 use super::{CustomGameSetupUiTree, support::*};
@@ -163,6 +162,7 @@ pub fn menu(ga: &GameAssets) -> impl Bundle {
                     )
                 ]
             ),
+            back_to_menu::<CustomGameSetupUiTree>(ga, "Back to menu", MenuState::Main(Some(MainMenuSubState::StartGame)))
         ],
     )
 }
