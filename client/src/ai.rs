@@ -29,8 +29,8 @@ pub fn tick_ai(
         // Init
         ais.push(Box::new(Easiest::default()));
         ais.push(Box::new(Easy::default()));
-        ais.push(Box::new(Medium::default()));
-        ais.push(Box::new(Hard::default()));
+        ais.push(Box::new(Medium::<60>::default()));
+        ais.push(Box::new(Hard::<Medium<16>, 2>::default()));
     }
 
     if current_player.0 == 0 || *state != GameOperation::Bot {
