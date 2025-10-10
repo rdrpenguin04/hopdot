@@ -160,7 +160,7 @@ impl Grid {
 
             while let Some((x, y)) = cascade_queue.pop_front() {
                 // We've hit every square on the board. The game is over.
-                if visited_count == result.width() * result.height() {
+                if visited_count == result.width() as u16 * result.height() as u16 {
                     return (None, true);
                 }
                 let idx = y as usize * self.width as usize + x as usize;
