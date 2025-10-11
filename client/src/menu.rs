@@ -6,7 +6,7 @@ use bevy::{
 };
 
 use crate::{
-    MainState, add_hover_observers,
+    MainState, NeedNewBoard, add_hover_observers,
     anim::{SmoothingSettings, TargetMaterialColor, TargetTransform, TargetUiOpacity},
     ui_menu::{CreditsUiTree, CustomGameSetupUiTree, RulesUiTree, SettingsUiTree},
 };
@@ -144,6 +144,11 @@ pub enum RadioState {
     Disabled(usize),
 }
 
+// Dirty special case
+#[derive(Clone, Copy, Component, Reflect)]
+#[reflect(Component)]
+pub struct ContinueButton;
+
 impl RadioState {
     #[must_use]
     pub const fn value(&self) -> usize {
@@ -257,9 +262,17 @@ fn insert_menu_element(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
                 });
             }
             "go" => {
-                entity_commands.observe(|_: On<Pointer<Click>>, mut next_state: ResMut<NextState<MainState>>| {
-                    next_state.set(MainState::Game);
-                });
+                entity_commands.observe(
+                    |_: On<Pointer<Click>>,
+                     mut next_state: ResMut<NextState<MainState>>,
+                     menu: Option<Res<State<MenuState>>>,
+                     mut new_board: ResMut<NextState<NeedNewBoard>>| {
+                        if matches!(menu.map(|x| **x), Some(MenuState::Main(Some(MainMenuSubState::StartGame)))) {
+                            new_board.set(NeedNewBoard(true));
+                        }
+                        next_state.set(MainState::Game);
+                    },
+                );
             }
             "main-menu" => {
                 entity_commands.observe(|_: On<Pointer<Click>>, mut next_menu: ResMut<NextState<MenuState>>| {
@@ -337,6 +350,19 @@ fn switch_menus(
     *prev_menu = cur_menu.map(|x| **x);
 }
 
+// Dirty special case
+fn handle_continue_button(
+    cur_menu: Option<Res<State<MenuState>>>,
+    mut continue_button: Query<&mut Visibility, With<ContinueButton>>,
+    need_new_board: Res<State<NeedNewBoard>>,
+) {
+    if matches!(cur_menu.as_ref().map(|x| ***x), Some(MenuState::Main(Some(MainMenuSubState::Main)))) {
+        if let Ok(mut continue_button) = continue_button.single_mut() {
+            *continue_button = if need_new_board.0 { Visibility::Hidden } else { Visibility::Inherited };
+        }
+    }
+}
+
 fn cleanup_menus(
     cur_menu: Option<Res<State<MenuState>>>,
     mut prev_menu: Local<Option<MenuState>>,
@@ -400,7 +426,12 @@ pub fn plugin(app: &mut App) {
         })
         .run_if(in_state(MenuState::Pause)),
     )
-    .add_systems(Update, switch_menus.run_if(state_changed::<MenuState>.or(state_changed::<MainState>)))
+    .add_systems(
+        Update,
+        (switch_menus, handle_continue_button)
+            .chain()
+            .run_if(state_changed::<MenuState>.or(state_changed::<MainState>)),
+    )
     .add_systems(Update, animate_menu_radios)
     .add_systems(Update, cleanup_menus)
     .add_sub_state::<MenuState>()

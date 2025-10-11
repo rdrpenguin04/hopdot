@@ -19,7 +19,7 @@ use bevy_skein::SkeinPlugin;
 
 use crate::{
     anim::{Bouncing, SmoothingSettings, TargetMaterialColor, TargetTransform, TargetUiOpacity},
-    menu::{MenuElement, MenuState},
+    menu::MenuState,
     projection::PerspectiveMinAspect,
     ui_menu::{GameEndText, GameEndUiTree},
 };
@@ -649,16 +649,6 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
     ));
 
     commands.spawn(SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/main-menu.glb"))));
-
-    commands.spawn((
-        SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/gamepaused.glb"))),
-        MenuElement {
-            for_menu: MenuState::Pause,
-            target: Some(Transform::from_xyz(-3.5, -0.2, -3.0)),
-            menu_action: None,
-            side: -1.0,
-        },
-    ));
 
     commands.spawn((
         GridTray,
