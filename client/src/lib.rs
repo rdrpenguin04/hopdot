@@ -345,7 +345,7 @@ pub fn main() {
                 ui_opacity.0 = 0.0;
                 for ui_tree in &ui_trees {
                     commands.spawn_task(move || async move {
-                        AsyncWorld.sleep(1.0).await;
+                        AsyncWorld.sleep(0.75).await;
                         fetch!(ui_tree, Visibility).get_mut(|x| *x = Visibility::Hidden)?;
                         Ok(())
                     });
@@ -422,7 +422,7 @@ fn run_splash(
         4.0.. => {
             next_state.set(MainState::Menu);
             commands.spawn_task(move || async move {
-                AsyncWorld.sleep(1.0).await;
+                AsyncWorld.sleep(0.75).await;
                 fetch!(splash, Visibility).get_mut(|x| *x = Visibility::Hidden)?;
                 Ok(())
             });
@@ -450,7 +450,7 @@ fn esc_to_menu(
                 ui_opacity.0 = 0.0;
                 let ui_tree = ui_tree.single().unwrap();
                 commands.spawn_task(move || async move {
-                    AsyncWorld.sleep(1.0).await;
+                    AsyncWorld.sleep(0.75).await;
                     fetch!(ui_tree, Visibility).get_mut(|x| *x = Visibility::Hidden)?;
                     Ok(())
                 });

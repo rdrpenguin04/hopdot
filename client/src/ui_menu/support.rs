@@ -38,7 +38,7 @@ pub fn back_to_menu<T: Component>(ga: &GameAssets, text: &'static str, menu: Men
                 ui_opacity.0 = 0.0;
                 let ui_tree = ui_tree.single().unwrap();
                 commands.spawn_task(move || async move {
-                    AsyncWorld.sleep(1.0).await;
+                    AsyncWorld.sleep(0.75).await;
                     fetch!(ui_tree, Visibility).get_mut(|x| *x = Visibility::Hidden)?;
                     Ok(())
                 });
