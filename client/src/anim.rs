@@ -103,22 +103,23 @@ fn animate_cell_colors(mut cells: Query<(&mut TargetMaterialColor, &CellColor)>,
 }
 
 fn animate_material_colors(
-    meshes: Query<(&MeshMaterial3d<StandardMaterial>, &TargetMaterialColor)>,
+    meshes: Query<(&MeshMaterial3d<StandardMaterial>, &TargetMaterialColor, Has<CellColor>)>,
     time: Res<Time>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    for (material, target_color) in &meshes {
+    for (material, target_color, is_cell) in &meshes {
         if let Color::Srgba(target_color) = target_color.0 {
+            let decay_rate = if is_cell { 3.0 } else { 6.0 };
             let material = materials.get_mut(material.id()).unwrap();
             if let Color::Srgba(srgba) = &mut material.base_color {
                 let mut temp = srgba.to_vec4();
                 let target_color_vec = target_color.to_vec4();
-                temp.smooth_nudge(&target_color_vec, 3.0, time.delta_secs());
+                temp.smooth_nudge(&target_color_vec, decay_rate, time.delta_secs());
                 *srgba = Srgba::from_vec4(temp);
             } else if let Color::LinearRgba(srgba) = &mut material.base_color {
                 let mut temp = srgba.to_vec4();
                 let target_color_vec = target_color.to_vec4();
-                temp.smooth_nudge(&target_color_vec, 3.0, time.delta_secs());
+                temp.smooth_nudge(&target_color_vec, decay_rate, time.delta_secs());
                 *srgba = LinearRgba::from_vec4(temp);
             } else {
                 dbg!(material.base_color);
