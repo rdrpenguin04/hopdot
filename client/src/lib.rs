@@ -335,11 +335,10 @@ pub fn main() {
                 ai::tick_ai,
                 scatter_tick.run_if(ready_for_scatter),
                 (orbit, game_ended).run_if(in_state(EndGame { game_ended: true })),
-                esc_to_menu,
             )
                 .run_if(in_state(MainState::Game)),
         )
-        .add_systems(Update, run_splash)
+        .add_systems(Update, (run_splash, esc_to_menu.after(game_ended)))
         .add_systems(
             OnEnter(MainState::Splash),
             |mut commands: Commands, mut ui_opacity: ResMut<TargetUiOpacity>, ui_trees: Query<Entity, (With<Node>, Without<ChildOf>)>| {
@@ -434,14 +433,32 @@ fn run_splash(
 
 fn esc_to_menu(
     key_input: Res<ButtonInput<KeyCode>>,
-    mut next_need_new_board: ResMut<NextState<NeedNewBoard>>,
     mut main_state: ResMut<NextState<MainState>>,
     mut menu_state: ResMut<NextState<MenuState>>,
+    cur_state: Res<State<MainState>>,
+    end_game: Option<Res<State<EndGame>>>,
+    mut ui_opacity: ResMut<TargetUiOpacity>,
+    mut commands: Commands,
+    ui_tree: Query<Entity, With<GameEndUiTree>>,
 ) {
     if key_input.just_pressed(KeyCode::Escape) {
-        next_need_new_board.set(NeedNewBoard(false)); // So we don't accidentally reset the board coming back from pause
-        main_state.set(MainState::Menu);
-        menu_state.set(MenuState::Pause);
+        if *cur_state == MainState::Game {
+            if let Some(end_game) = end_game
+                && end_game.game_ended
+            {
+                main_state.set(MainState::Menu);
+                ui_opacity.0 = 0.0;
+                let ui_tree = ui_tree.single().unwrap();
+                commands.spawn_task(move || async move {
+                    AsyncWorld.sleep(1.0).await;
+                    fetch!(ui_tree, Visibility).get_mut(|x| *x = Visibility::Hidden)?;
+                    Ok(())
+                });
+            } else {
+                main_state.set(MainState::Menu);
+                menu_state.set(MenuState::Pause);
+            }
+        }
     }
 }
 
