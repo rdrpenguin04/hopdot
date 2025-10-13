@@ -1,9 +1,14 @@
 use bevy::prelude::*;
 
-use crate::{CellColor, Config, Dot, DotCell, GRAY, PlayerConfigEntry};
+use crate::{CellColor, Config, Dot, DotCell, GRAY};
 
 #[derive(Component, Deref, DerefMut, Reflect)]
+#[reflect(Component)]
 pub struct TargetTransform(pub Transform);
+
+#[derive(Component, Default, Deref, DerefMut, Reflect)]
+#[reflect(Component)]
+pub struct TargetMaterialColor(pub Color);
 
 #[derive(Component, Default, Reflect)]
 pub struct SmoothingSettings {
@@ -19,8 +24,18 @@ pub struct Bouncing(pub f64);
 pub struct TargetUiOpacity(pub f32);
 
 pub fn plugin(app: &mut App) {
-    app.add_systems(Update, (arrange_dots, animate_cell_colors, smooth_transform, run_bouncing, run_ui_opacity))
-        .insert_resource(TargetUiOpacity(0.0));
+    app.add_systems(
+        Update,
+        (
+            arrange_dots,
+            animate_cell_colors,
+            animate_material_colors.after(animate_cell_colors),
+            smooth_transform,
+            run_bouncing,
+            run_ui_opacity,
+        ),
+    )
+    .insert_resource(TargetUiOpacity(0.0));
 }
 
 fn smooth_transform(mut transforms: Query<(&TargetTransform, &SmoothingSettings, &mut Transform)>, time: Res<Time>) {
@@ -73,28 +88,38 @@ fn arrange_dots(cells: Query<(&DotCell, &Transform)>, mut dots: Query<&mut Targe
     }
 }
 
-fn animate_cell_colors(
-    cells: Query<(&MeshMaterial3d<StandardMaterial>, &CellColor)>,
-    player_config: Res<Config>,
-    time: Res<Time>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    for (material, color_idx) in &cells {
+fn animate_cell_colors(mut cells: Query<(&mut TargetMaterialColor, &CellColor)>, player_config: Res<Config>) {
+    for (mut material, color_idx) in &mut cells {
         let target_color = if color_idx.player == 0 {
             GRAY
         } else {
-            match player_config.players[color_idx.player - 1] {
-                PlayerConfigEntry::Human { color, .. } => color,
-                PlayerConfigEntry::Bot { color, .. } => color,
-            }
+            player_config.players[color_idx.player - 1].color()
         };
-        if let Color::Srgba(target_color) = target_color {
+        material.0 = target_color;
+    }
+}
+
+fn animate_material_colors(
+    meshes: Query<(&MeshMaterial3d<StandardMaterial>, &TargetMaterialColor, Has<CellColor>)>,
+    time: Res<Time>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    for (material, target_color, is_cell) in &meshes {
+        if let Color::Srgba(target_color) = target_color.0 {
+            let decay_rate = if is_cell { 3.0 } else { 6.0 };
             let material = materials.get_mut(material.id()).unwrap();
             if let Color::Srgba(srgba) = &mut material.base_color {
                 let mut temp = srgba.to_vec4();
                 let target_color_vec = target_color.to_vec4();
-                temp.smooth_nudge(&target_color_vec, 3.0, time.delta_secs());
+                temp.smooth_nudge(&target_color_vec, decay_rate, time.delta_secs());
                 *srgba = Srgba::from_vec4(temp);
+            } else if let Color::LinearRgba(srgba) = &mut material.base_color {
+                let mut temp = srgba.to_vec4();
+                let target_color_vec = target_color.to_vec4();
+                temp.smooth_nudge(&target_color_vec, decay_rate, time.delta_secs());
+                *srgba = LinearRgba::from_vec4(temp);
+            } else {
+                dbg!(material.base_color);
             }
             let mut temp = material.emissive.to_vec4();
             temp.smooth_nudge(&Vec4::ZERO, 10.0, time.delta_secs());

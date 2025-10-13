@@ -2,13 +2,16 @@ use std::time::Duration;
 
 use bevy::prelude::*;
 use bevy_prng::WyRand;
-use bevy_rand::global::GlobalEntropy;
+use bevy_rand::global::GlobalRng;
 use common::{
     ai::{Ai, Easiest, Easy, Hard, Medium},
     grid::Grid,
 };
 
 use crate::{CellColor, Config, CurrentTurn, Dot, DotCell, GameAssets, GameOperation, GridTray, PlayerConfigEntry, VisualGrid, spawn_dot};
+
+#[derive(Resource, Default, Deref, DerefMut)]
+pub struct Ais(Vec<Box<dyn Ai>>);
 
 pub fn tick_ai(
     mut commands: Commands,
@@ -19,18 +22,18 @@ pub fn tick_ai(
     grid: Res<VisualGrid>,
     mut cells: Query<(&DotCell, &mut CellColor, &Transform)>,
     game_assets: Res<GameAssets>,
-    mut rng: GlobalEntropy<WyRand>,
+    mut rng: Single<&mut WyRand, With<GlobalRng>>,
     time: Res<Time>,
     mut timer: Local<Timer>,
     grid_tray: Query<Entity, With<GridTray>>,
-    mut ais: Local<Vec<Box<dyn Ai>>>,
+    mut ais: ResMut<Ais>,
 ) {
     if ais.is_empty() {
         // Init
         ais.push(Box::new(Easiest::default()));
         ais.push(Box::new(Easy::default()));
-        ais.push(Box::new(Medium::default()));
-        ais.push(Box::new(Hard::default()));
+        ais.push(Box::new(Medium::<60>::default()));
+        ais.push(Box::new(Hard::<Medium<16>, 2>::default()));
     }
 
     if current_player.0 == 0 || *state != GameOperation::Bot {
@@ -76,7 +79,7 @@ pub fn tick_ai(
     let cell = ai.tick(&simple_grid, current_player.0 as u8, &mut rng);
 
     timer.tick(time.delta());
-    if !timer.finished() {
+    if !timer.is_finished() {
         return;
     }
 

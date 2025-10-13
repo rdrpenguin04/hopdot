@@ -1,14 +1,14 @@
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 use bevy::{
-    ecs::{component::HookContext, world::DeferredWorld},
+    ecs::{lifecycle::HookContext, world::DeferredWorld},
     prelude::*,
 };
 
 use crate::{
-    MainState, add_hover_observers,
-    anim::{SmoothingSettings, TargetTransform, TargetUiOpacity},
-    ui_menu::{CreditsUiTree, RulesUiTree, SettingsUiTree},
+    Config, MainState, NeedNewBoard, add_hover_observers,
+    anim::{SmoothingSettings, TargetMaterialColor, TargetTransform, TargetUiOpacity},
+    ui_menu::{CreditsUiTree, CustomConfig, CustomGameSetupUiTree, RulesUiTree, SettingsUiTree},
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect)]
@@ -56,20 +56,40 @@ impl MenuState {
         }
     }
 
+    fn is_deeper_than(&self, menu: &Self) -> bool {
+        // TODO: generalize
+        *self == Self::Main(Some(MainMenuSubState::StartGame)) && *menu == Self::Main(Some(MainMenuSubState::Main))
+    }
+
+    fn is_top_level(&self) -> bool {
+        matches!(self, Self::Main(None) | Self::Pause)
+    }
+
     fn action_for_menu(&self, prev: Option<&Self>, menu: Option<&Self>) -> FlyAction {
         use FlyAction::*;
         use FlyDirection::*;
+
         match (self, prev, menu) {
             // Menu hasn't changed
             (_, y, z) if y == z => Stay,
-            // Top-level menu has changed, we're in the new menu
-            (x, Some(y), Some(z)) if x.shows_for_menu(z) && !y.eq_top_menu(z) => FlyFrom(Side),
-            // Top-level menu has changed, we're in the old menu
-            (x, Some(y), Some(z)) if x.shows_for_menu(y) && !y.eq_top_menu(z) => FlyTo(North),
             // Entering menu, we're in the new menu
             (x, None, Some(z)) if x.shows_for_menu(z) => FlyFrom(Side),
             // Exiting menu, we're in the old menu
             (x, Some(y), None) if x.shows_for_menu(y) => FlyTo(North),
+            // Top-level menu has changed, we're in the new menu
+            (x, Some(y), Some(z)) if x.shows_for_menu(z) && !y.eq_top_menu(z) => FlyFrom(Side),
+            // Top-level menu has changed, we're in the old menu
+            (x, Some(y), Some(z)) if x.shows_for_menu(y) && !y.eq_top_menu(z) => FlyTo(North),
+            // Changing submenu level and we don't care
+            (x, Some(y), Some(z)) if x.is_top_level() && y.eq_top_menu(z) => Stay,
+            // Going to deeper menu level, we're in the new menu
+            (x, Some(y), Some(z)) if x.shows_for_menu(z) && z.is_deeper_than(y) => FlyFrom(Side),
+            // Going to deeper menu level, we're in the old menu
+            (x, Some(y), Some(z)) if x.shows_for_menu(y) && z.is_deeper_than(y) => FlyTo(South),
+            // Going to shallower menu level, we're in the new menu
+            (x, Some(y), Some(z)) if x.shows_for_menu(z) && !z.is_deeper_than(y) => FlyFrom(South),
+            // Going to shallower menu level, we're in the old menu
+            (x, Some(y), Some(z)) if x.shows_for_menu(y) && !z.is_deeper_than(y) => FlyTo(Side),
             // We're not involved in this transition
             _ => Stay,
         }
@@ -82,7 +102,7 @@ impl Default for MenuState {
     }
 }
 
-#[derive(Component, Default, Reflect)]
+#[derive(Clone, Component, Default, Reflect)]
 #[require(
     TargetTransform(Transform::default()),
     SmoothingSettings { translation_decay_rate: 3.0, scale_decay_rate: 10.0, ..default() },
@@ -110,6 +130,72 @@ impl MenuElement {
     }
 }
 
+#[derive(Component, Default, Reflect)]
+#[reflect(Component, Default)]
+#[component(on_insert = insert_menu_radio)]
+pub struct MenuRadio {
+    pub option_name: String,
+    pub id: usize,
+}
+
+#[derive(Clone, Copy, Reflect)]
+pub enum RadioState {
+    Enabled(usize),
+    Disabled(usize),
+}
+
+// Dirty special case
+#[derive(Clone, Copy, Component, Reflect)]
+#[reflect(Component)]
+pub struct ContinueButton;
+
+impl RadioState {
+    #[must_use]
+    pub const fn value(&self) -> usize {
+        match self {
+            Self::Enabled(x) | Self::Disabled(x) => *x,
+        }
+    }
+
+    #[must_use]
+    pub const fn value_opt(&self) -> Option<usize> {
+        match self {
+            Self::Enabled(x) => Some(*x),
+            Self::Disabled(_) => None,
+        }
+    }
+
+    pub const fn disable(&mut self) {
+        *self = Self::Disabled(self.value());
+    }
+
+    pub const fn enable(&mut self) {
+        *self = Self::Enabled(self.value());
+    }
+}
+
+#[derive(Resource, Default, Reflect)]
+#[reflect(Resource, Default)]
+pub struct MenuRadios {
+    pub radios: HashMap<String, RadioState>,
+}
+
+const SELECTED_BACK: Color = Color::Srgba(Srgba::rgb(0.0, 1.0, 0.0));
+const DESELECTED_BACK: Color = Color::Srgba(Srgba::rgb(0.0, 0.0, 1.0));
+const DISABLED_BACK: Color = Color::Srgba(Srgba::rgb(0.4, 0.4, 0.45));
+
+const SELECTED_TEXT: Color = Color::Srgba(Srgba::rgb(0.0, 0.0, 1.0));
+const DESELECTED_TEXT: Color = Color::Srgba(Srgba::rgb(0.0, 1.0, 0.0));
+const DISABLED_TEXT: Color = Color::Srgba(Srgba::rgb(0.2, 0.2, 0.25));
+
+#[derive(Component)]
+#[require(TargetMaterialColor = TargetMaterialColor(DESELECTED_BACK))]
+pub struct MenuRadioBack(pub MenuRadio);
+
+#[derive(Component)]
+#[require(TargetMaterialColor = TargetMaterialColor(DESELECTED_TEXT))]
+pub struct MenuRadioText(pub MenuRadio);
+
 fn insert_menu_element(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
     let transform = *world.get(entity).unwrap();
     let mut menu_element = world.get_mut::<MenuElement>(entity).unwrap();
@@ -124,7 +210,7 @@ fn insert_menu_element(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
         match action {
             "credits" => {
                 entity_commands.observe(
-                    |_: Trigger<Pointer<Click>>,
+                    |_: On<Pointer<Click>>,
                      mut next_state: ResMut<NextState<MainState>>,
                      mut credits_ui_tree: Query<&mut Visibility, With<CreditsUiTree>>,
                      mut ui_opacity: ResMut<TargetUiOpacity>| {
@@ -136,7 +222,7 @@ fn insert_menu_element(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
             }
             "rules" => {
                 entity_commands.observe(
-                    |_: Trigger<Pointer<Click>>,
+                    |_: On<Pointer<Click>>,
                      mut next_state: ResMut<NextState<MainState>>,
                      mut settings_ui_tree: Query<&mut Visibility, With<RulesUiTree>>,
                      mut ui_opacity: ResMut<TargetUiOpacity>| {
@@ -148,7 +234,7 @@ fn insert_menu_element(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
             }
             "settings" => {
                 entity_commands.observe(
-                    |_: Trigger<Pointer<Click>>,
+                    |_: On<Pointer<Click>>,
                      mut next_state: ResMut<NextState<MainState>>,
                      mut settings_ui_tree: Query<&mut Visibility, With<SettingsUiTree>>,
                      mut ui_opacity: ResMut<TargetUiOpacity>| {
@@ -158,16 +244,86 @@ fn insert_menu_element(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
                     },
                 );
             }
+            "custom-setup" => {
+                entity_commands.observe(
+                    |_: On<Pointer<Click>>,
+                     mut next_state: ResMut<NextState<MainState>>,
+                     mut game_setup_ui_tree: Query<&mut Visibility, With<CustomGameSetupUiTree>>,
+                     mut ui_opacity: ResMut<TargetUiOpacity>,
+                     config: Res<Config>,
+                     mut custom_config: ResMut<CustomConfig>| {
+                        next_state.set(MainState::DimForUi);
+                        *game_setup_ui_tree.single_mut().unwrap() = Visibility::Visible;
+                        ui_opacity.0 = 1.0;
+                        if custom_config.players.len() == 0 {
+                            custom_config.clone_from(&config);
+                        }
+                    },
+                );
+            }
             "start-game" => {
-                entity_commands.observe(|_: Trigger<Pointer<Click>>, mut next_state: ResMut<NextState<MainState>>| {
-                    next_state.set(MainState::Game);
+                entity_commands.observe(|_: On<Pointer<Click>>, mut next_menu: ResMut<NextState<MenuState>>| {
+                    next_menu.set(MenuState::Main(Some(MainMenuSubState::StartGame)));
                 });
             }
+            "go" => {
+                entity_commands.observe(
+                    |_: On<Pointer<Click>>,
+                     mut next_state: ResMut<NextState<MainState>>,
+                     menu: Option<Res<State<MenuState>>>,
+                     mut new_board: ResMut<NextState<NeedNewBoard>>| {
+                        if matches!(menu.map(|x| **x), Some(MenuState::Main(Some(MainMenuSubState::StartGame)))) {
+                            new_board.set(NeedNewBoard(true));
+                        }
+                        next_state.set(MainState::Game);
+                    },
+                );
+            }
+            "main-menu" => {
+                entity_commands.observe(|_: On<Pointer<Click>>, mut next_menu: ResMut<NextState<MenuState>>| {
+                    next_menu.set(MenuState::Main(Some(MainMenuSubState::Main)));
+                });
+            }
+            "game-type-changed" | "game-difficulty-changed" => {}
             x => {
                 warn!("unknown action: {x}");
             }
         }
     }
+}
+
+fn insert_menu_radio(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
+    let menu_radio = world.get::<MenuRadio>(entity).unwrap();
+    let option_name = menu_radio.option_name.clone();
+    let id = menu_radio.id;
+    world
+        .get_resource_mut::<MenuRadios>()
+        .unwrap()
+        .radios
+        .entry(option_name.clone())
+        .or_insert(RadioState::Enabled(0));
+    let children = world.get::<Children>(entity).unwrap().iter().collect::<Vec<_>>();
+    for (i, child) in children.into_iter().enumerate() {
+        let is_text = i == 1; // Dirty hack because the components that *would* let us check accurately don't exist yet :)
+        let mut commands = world.commands();
+        let menu_radio = MenuRadio {
+            option_name: option_name.clone(),
+            id,
+        };
+        if is_text {
+            commands.entity(child).insert(MenuRadioText(menu_radio));
+        } else {
+            commands.entity(child).insert(MenuRadioBack(menu_radio));
+        }
+    }
+    world
+        .commands()
+        .entity(entity)
+        .observe(move |_: On<Pointer<Click>>, mut menu_radios: ResMut<MenuRadios>| {
+            if let RadioState::Enabled(x) = menu_radios.radios.get_mut(&option_name).unwrap() {
+                *x = id;
+            }
+        });
 }
 
 fn switch_menus(
@@ -199,6 +355,19 @@ fn switch_menus(
     *prev_menu = cur_menu.map(|x| **x);
 }
 
+// Dirty special case
+fn handle_continue_button(
+    cur_menu: Option<Res<State<MenuState>>>,
+    mut continue_button: Query<&mut Visibility, With<ContinueButton>>,
+    need_new_board: Res<State<NeedNewBoard>>,
+) {
+    if matches!(cur_menu.as_ref().map(|x| ***x), Some(MenuState::Main(Some(MainMenuSubState::Main)))) {
+        if let Ok(mut continue_button) = continue_button.single_mut() {
+            *continue_button = if need_new_board.0 { Visibility::Hidden } else { Visibility::Inherited };
+        }
+    }
+}
+
 fn cleanup_menus(
     cur_menu: Option<Res<State<MenuState>>>,
     mut prev_menu: Local<Option<MenuState>>,
@@ -221,6 +390,37 @@ fn cleanup_menus(
     *prev_menu = cur_menu.map(|x| **x);
 }
 
+fn animate_menu_radios(
+    menu_radio_backs: Query<(&mut TargetMaterialColor, &MenuRadioBack), Without<MenuRadioText>>,
+    menu_radio_texts: Query<(&mut TargetMaterialColor, &MenuRadioText), Without<MenuRadioBack>>,
+    menu_radios: Res<MenuRadios>,
+) {
+    if menu_radios.is_changed() {
+        for (mut color, back) in menu_radio_backs {
+            if let RadioState::Enabled(id) = menu_radios.radios[&back.0.option_name] {
+                if id == back.0.id {
+                    color.0 = SELECTED_BACK;
+                } else {
+                    color.0 = DESELECTED_BACK;
+                }
+            } else {
+                color.0 = DISABLED_BACK;
+            }
+        }
+        for (mut color, back) in menu_radio_texts {
+            if let RadioState::Enabled(id) = menu_radios.radios[&back.0.option_name] {
+                if id == back.0.id {
+                    color.0 = SELECTED_TEXT;
+                } else {
+                    color.0 = DESELECTED_TEXT;
+                }
+            } else {
+                color.0 = DISABLED_TEXT;
+            }
+        }
+    }
+}
+
 pub fn plugin(app: &mut App) {
     app.add_systems(
         Update,
@@ -231,8 +431,17 @@ pub fn plugin(app: &mut App) {
         })
         .run_if(in_state(MenuState::Pause)),
     )
-    .add_systems(Update, switch_menus.run_if(state_changed::<MenuState>.or(state_changed::<MainState>)))
+    .add_systems(
+        Update,
+        (switch_menus, handle_continue_button)
+            .chain()
+            .run_if(state_changed::<MenuState>.or(state_changed::<MainState>)),
+    )
+    .add_systems(Update, animate_menu_radios)
     .add_systems(Update, cleanup_menus)
     .add_sub_state::<MenuState>()
-    .register_type::<MenuElement>();
+    .init_resource::<MenuRadios>()
+    .register_type::<MenuElement>()
+    .register_type::<MenuRadio>()
+    .register_type::<MenuRadios>();
 }

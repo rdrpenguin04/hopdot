@@ -1,8 +1,8 @@
+#![feature(iter_collect_into)]
+
 pub mod ai;
 pub mod anim;
-pub mod bundle_fn;
 pub mod menu;
-pub mod observe;
 pub mod projection;
 pub mod ui_menu;
 
@@ -13,23 +13,16 @@ use std::{
 
 use bevy::audio::Volume;
 #[allow(unused_imports)] // WASM
-use bevy::{
-    core_pipeline::{
-        bloom::Bloom,
-        experimental::taa::{TemporalAntiAliasPlugin, TemporalAntiAliasing},
-    },
-    pbr::ShadowFilteringMethod,
-    platform::collections::HashSet,
-    prelude::*,
-};
-use bevy_defer::{AsyncAccess, AsyncCommandsExtension, AsyncPlugin, AsyncWorld, fetch};
+use bevy::{anti_alias::taa::TemporalAntiAliasing, light::ShadowFilteringMethod, platform::collections::HashSet, post_process::bloom::Bloom, prelude::*};
+use bevy_defer::{AsyncCommandsExtension, AsyncPlugin, AsyncWorld, fetch};
 use bevy_prng::WyRand;
 use bevy_rand::plugin::EntropyPlugin;
 use bevy_skein::SkeinPlugin;
 
 use crate::{
-    anim::{Bouncing, SmoothingSettings, TargetTransform, TargetUiOpacity},
-    menu::{MenuElement, MenuState},
+    ai::Ais,
+    anim::{Bouncing, SmoothingSettings, TargetMaterialColor, TargetTransform, TargetUiOpacity},
+    menu::MenuState,
     projection::PerspectiveMinAspect,
     ui_menu::{GameEndText, GameEndUiTree},
 };
@@ -91,6 +84,8 @@ impl FromWorld for GameAssets {
 }
 
 #[derive(Clone, Component, Copy, Default, Reflect)]
+#[require(TargetMaterialColor)]
+#[reflect(Component)]
 pub struct CellColor {
     player: usize, // 0 = off, 1 = player 1, etc
 }
@@ -137,13 +132,74 @@ pub struct EndGame {
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect, States)]
 pub struct CurrentTurn(usize);
 
-#[derive(Clone, Reflect)]
+#[derive(Clone, Debug, Reflect)]
 pub enum PlayerConfigEntry {
-    Human { color: Color, name: String },
-    Bot { color: Color, level: usize },
+    Human { color: Color, name: String, _level: usize },
+    Bot { color: Color, _name: String, level: usize },
+    Disabled { _color: Color, _name: String, _level: usize },
 }
 
-#[derive(Resource, Reflect)]
+impl PlayerConfigEntry {
+    pub fn is_human(&self) -> bool {
+        matches!(self, Self::Human { .. })
+    }
+    pub fn is_bot(&self) -> bool {
+        matches!(self, Self::Bot { .. })
+    }
+    pub fn is_disabled(&self) -> bool {
+        matches!(self, Self::Disabled { .. })
+    }
+
+    pub fn to_human(&mut self) {
+        *self = Self::Human {
+            color: self.color(),
+            name: self.name().to_owned(),
+            _level: self.level(),
+        };
+    }
+
+    pub fn to_bot(&mut self) {
+        *self = Self::Bot {
+            color: self.color(),
+            _name: self.name().to_owned(),
+            level: self.level(),
+        };
+    }
+
+    pub fn to_disabled(&mut self) {
+        *self = Self::Disabled {
+            _color: self.color(),
+            _name: self.name().to_owned(),
+            _level: self.level(),
+        };
+    }
+
+    pub fn color(&self) -> Color {
+        match self {
+            Self::Human { color, .. } | Self::Bot { color, .. } | Self::Disabled { _color: color, .. } => *color,
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Human { name, .. } | Self::Bot { _name: name, .. } | Self::Disabled { _name: name, .. } => name,
+        }
+    }
+
+    pub fn level(&self) -> usize {
+        match self {
+            Self::Human { _level: level, .. } | Self::Bot { level, .. } | Self::Disabled { _level: level, .. } => *level,
+        }
+    }
+
+    pub fn set_level(&mut self, new_level: usize) {
+        match self {
+            Self::Human { _level: level, .. } | Self::Bot { level, .. } | Self::Disabled { _level: level, .. } => *level = new_level,
+        }
+    }
+}
+
+#[derive(Clone, Resource, Reflect)]
 pub struct Config {
     pub players: Vec<PlayerConfigEntry>,
     pub grid_size: (usize, usize),
@@ -224,8 +280,13 @@ impl<'a> IntoIterator for &'a VisualGrid {
 #[derive(Resource)]
 pub struct FlashIntensity(f32);
 
-#[derive(Resource)]
-pub struct SimpleConfig(usize, usize); // TODO: replace this with the actual config
+const TABLE_BASE_COLOR: Color = Color::Srgba(Srgba::rgb(0.904, 0.943, 1.0));
+const TABLE_DARK_COLOR: Color = Color::Srgba(Srgba::rgb(0.0, 0.005, 0.008));
+
+#[derive(Component, Reflect)]
+#[require(TargetMaterialColor = TargetMaterialColor(TABLE_BASE_COLOR))]
+#[reflect(Component)]
+pub struct TableMaterial;
 
 #[bevy_main]
 pub fn main() {
@@ -247,62 +308,41 @@ pub fn main() {
     .add_plugins(menu::plugin)
     .add_plugins(ui_menu::plugin);
 
-    #[cfg(not(target_family = "wasm"))]
+    #[cfg(feature = "dev")]
     {
-        app.add_plugins(TemporalAntiAliasPlugin);
+        use bevy_inspector_egui::{
+            bevy_egui::EguiPlugin,
+            quick::{StateInspectorPlugin, WorldInspectorPlugin},
+        };
+
+        app.add_plugins((
+            EguiPlugin::default(),
+            StateInspectorPlugin::<MainState>::default(),
+            StateInspectorPlugin::<CurrentTurn>::default(),
+            StateInspectorPlugin::<NeedNewBoard>::default(),
+            WorldInspectorPlugin::default(),
+        ));
     }
-
-    // #[cfg(debug_assertions)]
-    // {
-    //     use bevy_inspector_egui::{
-    //         bevy_egui::EguiPlugin,
-    //         quick::{StateInspectorPlugin, WorldInspectorPlugin},
-    //     };
-
-    //     app.add_plugins((
-    //         EguiPlugin {
-    //             enable_multipass_for_primary_context: true,
-    //         },
-    //         StateInspectorPlugin::<MainState>::default(),
-    //         StateInspectorPlugin::<CurrentTurn>::default(),
-    //         StateInspectorPlugin::<NeedNewBoard>::default(),
-    //         WorldInspectorPlugin::default(),
-    //     ));
-    // }
 
     app.init_resource::<GameAssets>()
         .init_resource::<VisualGrid>()
+        .init_resource::<Ais>()
         .insert_resource(AmbientLight {
             brightness: 1000.0,
             ..default()
         })
         .insert_resource(ClearColor(Color::srgb_u8(33, 34, 37)))
         .insert_resource(FlashIntensity(0.3))
-        .insert_resource(SimpleConfig(1, 0))
         .insert_resource(Config {
             players: vec![
                 PlayerConfigEntry::Human {
                     color: Color::srgb(0.0, 1.0, 0.0),
                     name: "Player 1".into(),
+                    _level: 0,
                 },
-                // PlayerConfigEntry::Human {
-                //     color: Color::srgb(0.0, 0.0, 1.0),
-                //     name: "Player 2".into(),
-                // },
-                // PlayerConfigEntry::Bot {
-                //     color: Color::srgb(1.0, 0.0, 0.0),
-                //     level: 2,
-                // },
-                // PlayerConfigEntry::Bot {
-                //     color: Color::srgb(0.0, 1.0, 1.0),
-                //     level: 2,
-                // },
-                // PlayerConfigEntry::Bot {
-                //     color: Color::srgb(0.0, 1.0, 0.0),
-                //     level: 2,
-                // },
                 PlayerConfigEntry::Bot {
                     color: Color::srgb(0.0, 0.0, 1.0),
+                    _name: "Player 2".into(),
                     level: 0,
                 },
             ],
@@ -311,16 +351,28 @@ pub fn main() {
         .add_systems(Startup, setup_scene)
         .add_systems(OnEnter(MainState::Game), fly_in_game)
         .add_systems(OnExit(MainState::Game), fly_out_game)
-        .add_systems(OnEnter(MainState::DimForUi), |lights: Query<&mut PointLight>| {
-            for mut light in lights {
-                light.intensity = 0.0;
-            }
-        })
-        .add_systems(OnExit(MainState::DimForUi), |lights: Query<&mut PointLight>| {
-            for mut light in lights {
-                light.intensity = 1_000_000.0;
-            }
-        })
+        .add_systems(
+            OnEnter(MainState::DimForUi),
+            |lights: Query<&mut PointLight>, mut table_material: Query<&mut TargetMaterialColor, With<TableMaterial>>| {
+                for mut light in lights {
+                    light.intensity = 0.0;
+                }
+                if let Ok(mut x) = table_material.single_mut() {
+                    x.0 = TABLE_DARK_COLOR;
+                }
+            },
+        )
+        .add_systems(
+            OnExit(MainState::DimForUi),
+            |lights: Query<&mut PointLight>, mut table_material: Query<&mut TargetMaterialColor, With<TableMaterial>>| {
+                for mut light in lights {
+                    light.intensity = 1_000_000.0;
+                }
+                if let Ok(mut x) = table_material.single_mut() {
+                    x.0 = TABLE_BASE_COLOR;
+                }
+            },
+        )
         .add_systems(
             OnEnter(MainState::Menu),
             (fly_to_menu, |mut end_game: ResMut<NextState<EndGame>>| {
@@ -334,11 +386,23 @@ pub fn main() {
                 ai::tick_ai,
                 scatter_tick.run_if(ready_for_scatter),
                 (orbit, game_ended).run_if(in_state(EndGame { game_ended: true })),
-                esc_to_menu,
             )
                 .run_if(in_state(MainState::Game)),
         )
-        .add_systems(Update, run_splash)
+        .add_systems(Update, (run_splash, esc_to_menu.after(game_ended)))
+        .add_systems(
+            OnEnter(MainState::Splash),
+            |mut commands: Commands, mut ui_opacity: ResMut<TargetUiOpacity>, ui_trees: Query<Entity, (With<Node>, Without<ChildOf>)>| {
+                ui_opacity.0 = 0.0;
+                for ui_tree in &ui_trees {
+                    commands.spawn_task(move || async move {
+                        AsyncWorld.sleep(0.75).await;
+                        fetch!(ui_tree, Visibility).get_mut(|x| *x = Visibility::Hidden)?;
+                        Ok(())
+                    });
+                }
+            },
+        )
         .init_state::<MainState>()
         .init_state::<NeedNewBoard>()
         .init_state::<CurrentTurn>()
@@ -354,6 +418,7 @@ pub fn main() {
         .register_type::<Config>()
         .register_type::<SmoothingSettings>()
         .register_type::<TargetTransform>()
+        .register_type::<TableMaterial>()
         .run();
 }
 
@@ -408,7 +473,7 @@ fn run_splash(
         4.0.. => {
             next_state.set(MainState::Menu);
             commands.spawn_task(move || async move {
-                AsyncWorld.sleep(1.0).await;
+                AsyncWorld.sleep(0.75).await;
                 fetch!(splash, Visibility).get_mut(|x| *x = Visibility::Hidden)?;
                 Ok(())
             });
@@ -419,14 +484,32 @@ fn run_splash(
 
 fn esc_to_menu(
     key_input: Res<ButtonInput<KeyCode>>,
-    mut next_need_new_board: ResMut<NextState<NeedNewBoard>>,
     mut main_state: ResMut<NextState<MainState>>,
     mut menu_state: ResMut<NextState<MenuState>>,
+    cur_state: Res<State<MainState>>,
+    end_game: Option<Res<State<EndGame>>>,
+    mut ui_opacity: ResMut<TargetUiOpacity>,
+    mut commands: Commands,
+    ui_tree: Query<Entity, With<GameEndUiTree>>,
 ) {
     if key_input.just_pressed(KeyCode::Escape) {
-        next_need_new_board.set(NeedNewBoard(false)); // So we don't accidentally reset the board coming back from pause
-        main_state.set(MainState::Menu);
-        menu_state.set(MenuState::Pause);
+        if *cur_state == MainState::Game {
+            if let Some(end_game) = end_game
+                && end_game.game_ended
+            {
+                main_state.set(MainState::Menu);
+                ui_opacity.0 = 0.0;
+                let ui_tree = ui_tree.single().unwrap();
+                commands.spawn_task(move || async move {
+                    AsyncWorld.sleep(0.75).await;
+                    fetch!(ui_tree, Visibility).get_mut(|x| *x = Visibility::Hidden)?;
+                    Ok(())
+                });
+            } else {
+                main_state.set(MainState::Menu);
+                menu_state.set(MenuState::Pause);
+            }
+        }
     }
 }
 
@@ -533,8 +616,8 @@ fn fly_to_menu(
 
 fn spawn_dot(x: f32, z: f32, game_assets: &GameAssets) -> impl Bundle {
     (
-        Mesh3d(game_assets.dot_mesh.clone_weak()),
-        MeshMaterial3d(game_assets.dot_color.clone_weak()),
+        Mesh3d(game_assets.dot_mesh.clone()),
+        MeshMaterial3d(game_assets.dot_color.clone()),
         Transform::from_xyz(x, 1.0, z).with_scale(Vec3::ZERO),
         SmoothingSettings {
             translation_decay_rate: 8.0,
@@ -556,7 +639,7 @@ fn spawn_cell(
 ) -> Entity {
     commands
         .spawn((
-            Mesh3d(game_assets.tile_mesh.clone_weak()),
+            Mesh3d(game_assets.tile_mesh.clone()),
             MeshMaterial3d(materials.add(GRAY)),
             Transform::from_xyz(x, -0.15, z),
             TargetTransform(Transform::from_xyz(x, -0.15, z)),
@@ -571,16 +654,16 @@ fn spawn_cell(
             ]),
             DotCellMeta { capacity },
         ))
-        .observe(|trigger: Trigger<Pointer<Over>>, mut targets: Query<&mut TargetTransform>| {
-            let mut target = targets.get_mut(trigger.target).unwrap();
+        .observe(|trigger: On<Pointer<Over>>, mut targets: Query<&mut TargetTransform>| {
+            let mut target = targets.get_mut(trigger.original_event_target()).unwrap();
             target.scale = Vec3::splat(1.05);
         })
-        .observe(|trigger: Trigger<Pointer<Out>>, mut targets: Query<&mut TargetTransform>| {
-            let mut target = targets.get_mut(trigger.target).unwrap();
+        .observe(|trigger: On<Pointer<Out>>, mut targets: Query<&mut TargetTransform>| {
+            let mut target = targets.get_mut(trigger.original_event_target()).unwrap();
             target.scale = Vec3::splat(1.0);
         })
         .observe(
-            move |trigger: Trigger<Pointer<Click>>,
+            move |trigger: On<Pointer<Click>>,
                   mut commands: Commands,
                   mut colors: Query<&mut CellColor>,
                   game_assets: Res<GameAssets>,
@@ -591,11 +674,11 @@ fn spawn_cell(
                 if let (Some(state), Some(mut next_state), Some(current_turn)) = (state, next_state, current_turn)
                     && *state == GameOperation::Human
                 {
-                    let mut color = colors.get_mut(trigger.target).unwrap();
+                    let mut color = colors.get_mut(trigger.original_event_target()).unwrap();
                     if color.player == 0 || color.player == current_turn.0 {
                         color.player = current_turn.0;
                         commands
-                            .entity(trigger.target)
+                            .entity(trigger.original_event_target())
                             .with_related::<Dot>((spawn_dot(x, z, &game_assets), ChildOf(grid_tray.single().unwrap())));
                         next_state.set(GameOperation::Animating);
                     }
@@ -608,17 +691,17 @@ fn spawn_cell(
 fn add_hover_observers(entity_commands: &mut EntityCommands) {
     let id = entity_commands.id();
     entity_commands
-        .observe(move |_: Trigger<Pointer<Over>>, mut targets: Query<&mut TargetTransform>| {
+        .observe(move |_: On<Pointer<Over>>, mut targets: Query<&mut TargetTransform>| {
             targets.get_mut(id).unwrap().scale = Vec3::splat(1.05);
         })
-        .observe(move |_: Trigger<Pointer<Out>>, mut targets: Query<&mut TargetTransform>| {
+        .observe(move |_: On<Pointer<Out>>, mut targets: Query<&mut TargetTransform>| {
             targets.get_mut(id).unwrap().scale = Vec3::splat(1.0);
         });
 }
 
 fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_server: Res<AssetServer>) {
     commands.spawn((
-        AudioPlayer(game_assets.bump_sfx.clone_weak()),
+        AudioPlayer(game_assets.bump_sfx.clone()),
         BumpPlayer,
         PlaybackSettings {
             volume: Volume::Decibels(-6.0),
@@ -626,29 +709,14 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
         },
     ));
 
-    commands.spawn(ui_menu::game_end(&game_assets));
-    commands.spawn(ui_menu::rules(&game_assets));
-    commands.spawn(ui_menu::settings(&game_assets));
-    commands.spawn(ui_menu::credits(&game_assets));
-
     commands.spawn((
-        Mesh3d(game_assets.splash_mesh.clone_weak()),
-        MeshMaterial3d(game_assets.splash_material.clone_weak()),
+        Mesh3d(game_assets.splash_mesh.clone()),
+        MeshMaterial3d(game_assets.splash_material.clone()),
         Transform::from_xyz(0.0, 12.0, 8.0).looking_to(Dir3::NEG_Z, Dir3::Y),
         Splash,
     ));
 
     commands.spawn(SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/main-menu.glb"))));
-
-    commands.spawn((
-        SceneRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/gamepaused.glb"))),
-        MenuElement {
-            for_menu: MenuState::Pause,
-            target: Some(Transform::from_xyz(-3.5, -0.2, -3.0)),
-            menu_action: None,
-            side: -1.0,
-        },
-    ));
 
     commands.spawn((
         GridTray,
@@ -660,7 +728,7 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
         Transform::from_xyz(0.0, 30.0, 0.0),
     ));
 
-    commands.spawn((SceneRoot(game_assets.table_scene.clone_weak()), Transform::from_xyz(0.0, -0.3, 0.0)));
+    commands.spawn((SceneRoot(game_assets.table_scene.clone()), Transform::from_xyz(0.0, -0.3, 0.0)));
 
     commands.spawn((
         PointLight {
@@ -697,12 +765,9 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
             commands.spawn((
                 Camera3d::default(),
                 Projection::custom(PerspectiveMinAspect::default()),
-                Camera { hdr: true, ..default() },
                 Transform::from_xyz(0.0, 12.0, 16.0).looking_to(Dir3::NEG_Z, Dir3::Y),
                 Msaa::Off,
-                #[cfg(not(target_family = "wasm"))]
                 TemporalAntiAliasing::default(),
-                #[cfg(not(target_family = "wasm"))]
                 ShadowFilteringMethod::Temporal,
                 TargetTransform(Transform::from_xyz(0.0, 12.0, 20.0).looking_to(Dir3::NEG_Z, Dir3::Y)),
                 SmoothingSettings {
@@ -816,6 +881,7 @@ pub fn scatter_tick(
         next_state.set(match player_config.players[next_turn_idx] {
             PlayerConfigEntry::Bot { .. } => GameOperation::Bot,
             PlayerConfigEntry::Human { .. } => GameOperation::Human,
+            _ => unreachable!(), // Disabled should never be in the final config
         });
         next_turn.set(CurrentTurn(next_turn_idx + 1)); // current_turn is 1-indexed
     }
@@ -834,6 +900,7 @@ pub fn game_ended(
     mut game_end_ui: Query<&mut Visibility, With<GameEndUiTree>>,
     mut game_end_text: Query<&mut Text, With<GameEndText>>,
     current_turn: Res<State<CurrentTurn>>,
+    // ais: Res<Ais>,
 ) {
     if let Ok(mut camera_pos) = camera_pos.single_mut() {
         let (width, height) = config.grid_size;
@@ -841,6 +908,20 @@ pub fn game_ended(
         *camera_pos = TargetTransform(Transform::from_xyz(0.0, max_dim as f32, 2.0 * max_dim as f32).looking_at(Vec3::ZERO, Vec3::Y));
         ui_opacity.0 = 1.0;
         *game_end_ui.single_mut().unwrap() = Visibility::Visible;
+        // let player = &config.players[current_turn.0 - 1];
+        // game_end_text.single_mut().unwrap().0 = format!(
+        //     "Player {}{} wins!",
+        //     current_turn.0,
+        //     if player.is_human() {
+        //         if player.name() == &format!("Player {}", current_turn.0) {
+        //             "".into()
+        //         } else {
+        //             format!(" ({})", player.name())
+        //         }
+        //     } else {
+        //         format!(" ({})", ais[player.level()].name())
+        //     }
+        // );
         game_end_text.single_mut().unwrap().0 = format!("Player {} wins!", current_turn.0);
     }
 }

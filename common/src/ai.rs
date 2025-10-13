@@ -187,9 +187,9 @@ impl Ai for Easy {
 }
 
 #[derive(Default)]
-pub struct Medium(Option<(u8, u8)>);
+pub struct Medium<const FAIL_CHANCE: u8>(Option<(u8, u8)>);
 
-impl Medium {
+impl<const FAIL_CHANCE: u8> Medium<FAIL_CHANCE> {
     fn tick_inner(&mut self, grid: &Grid, player: u8, rng: &mut dyn RngCore) -> Option<(u8, u8)> {
         let mut corner_count = 0;
         let mut viable_corners = Vec::new();
@@ -227,7 +227,7 @@ impl Medium {
         let max_eval = evals
             .iter()
             .fold(baseline_eval, |prev_max, (_, eval)| prev_max.max(*eval));
-        if max_eval - baseline_eval >= 2 {
+        if max_eval - baseline_eval >= 2 && rng.random::<u8>() >= FAIL_CHANCE {
             // We can actually make a dent if we do something. Let's do it.
             let candidates = evals
                 .into_iter()
@@ -274,7 +274,7 @@ impl Medium {
         let max_eval = new_candidates
             .iter()
             .fold(baseline_eval, |prev_max, (_, eval)| prev_max.max(*eval));
-        if !new_candidates.is_empty() {
+        if !new_candidates.is_empty() && rng.random::<u8>() >= FAIL_CHANCE {
             let final_candidates = new_candidates
                 .into_iter()
                 .filter_map(|(pos, score)| if score == max_eval { Some(pos) } else { None })
@@ -298,7 +298,7 @@ impl Medium {
     }
 }
 
-impl Ai for Medium {
+impl<const FAIL_CHANCE: u8> Ai for Medium<FAIL_CHANCE> {
     fn start_move(&mut self, _: &Grid) {
         self.0 = None;
     }
@@ -645,13 +645,14 @@ impl<T: PartialOrd + Copy + Debug> TreeState<T> {
 }
 
 #[derive(Default)]
-pub struct Hard {
+pub struct Hard<Fallback: Ai + Default, const FALLBACK_CHANCE: u8> {
     decision: Option<(u8, u8)>,
     tree_state: TreeState<i32>,
     num_players: u8,
+    fallback: Fallback,
 }
 
-impl Hard {
+impl<Fallback: Ai + Default, const FALLBACK_CHANCE: u8> Hard<Fallback, FALLBACK_CHANCE> {
     fn tick_inner(
         &mut self,
         _: &Grid, // TODO: should this be removed from tick() if it'll stay the same the whole time?
@@ -660,9 +661,12 @@ impl Hard {
     ) -> Option<(u8, u8)> {
         self.tree_state.set_player(player);
 
+        const MAX_MOVES: usize = 50000;
+        const MAX_CASCADES: usize = 10000;
+
         let mut total_moves = 0;
         let mut total_cascades = 0;
-        while total_moves < 100000 && total_cascades < 10000 {
+        while total_moves < MAX_MOVES && total_cascades < MAX_CASCADES {
             match self.tree_state.eval_next(
                 |grid, cur_turn, me| {
                     if let Some(grid) = grid {
@@ -702,17 +706,26 @@ impl Hard {
     }
 }
 
-impl Ai for Hard {
+impl<Fallback: Ai + Default, const FALLBACK_CHANCE: u8> Ai for Hard<Fallback, FALLBACK_CHANCE> {
     fn start_move(&mut self, grid: &Grid) {
         self.decision = None;
         self.tree_state.clear();
         self.tree_state.set_grid(grid.clone());
         self.num_players = grid.player_count();
+        self.fallback.start_move(grid);
     }
 
     fn tick(&mut self, grid: &Grid, player: u8, rng: &mut dyn RngCore) -> Option<(u8, u8)> {
         if self.decision.is_none() {
-            self.decision = self.tick_inner(grid, player, rng);
+            let biased_fallback_max = (128
+                - grid.score_for_player(player) * grid.width() as i32 * grid.height() as i32 / 256)
+                .min(255)
+                .max(0) as u8;
+            self.decision = if rng.random_range(0..=biased_fallback_max) < FALLBACK_CHANCE {
+                self.fallback.tick(grid, player, rng)
+            } else {
+                self.tick_inner(grid, player, rng)
+            };
         }
         self.decision
     }
@@ -761,7 +774,7 @@ mod test {
     #[test]
     fn basic_hard_test() {
         // This is a "don't be dumb" test for the Hard AI. It exists because the Hard AI was, in fact, dumb.
-        let mut ai = Hard::default();
+        let mut ai: Hard<Medium<0>, 0> = Hard::default();
         // On a 2x2 board, the only correct move for player 2 is the opposite corner as player 1.
         // As the Hard AI is supposed to have lookahead, this shouldn't be difficult.
         for y in [0, 1] {
