@@ -8,7 +8,11 @@ mod settings;
 
 use bevy::{prelude::*, window::PrimaryWindow};
 
-use crate::{menu::MenuRadios, ui_menu::{custom_game_setup::render_player_config, rules::RulesPageNumber}, Config, GameAssets, PlayerConfigEntry};
+use crate::{
+    Config, GameAssets, PlayerConfigEntry,
+    menu::MenuRadios,
+    ui_menu::{custom_game_setup::render_player_config, rules::RulesPageNumber},
+};
 
 #[derive(Component)]
 pub struct CreditsUiTree;
