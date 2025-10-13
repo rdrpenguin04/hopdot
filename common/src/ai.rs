@@ -719,8 +719,7 @@ impl<Fallback: Ai + Default, const FALLBACK_CHANCE: u8> Ai for Hard<Fallback, FA
         if self.decision.is_none() {
             let biased_fallback_max = (128
                 - grid.score_for_player(player) * grid.width() as i32 * grid.height() as i32 / 256)
-                .min(255)
-                .max(0) as u8;
+                .clamp(0, 255) as u8;
             self.decision = if rng.random_range(0..=biased_fallback_max) < FALLBACK_CHANCE {
                 self.fallback.tick(grid, player, rng)
             } else {
