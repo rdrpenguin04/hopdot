@@ -93,7 +93,10 @@ fn animate_cell_colors(mut cells: Query<(&mut TargetMaterialColor, &CellColor)>,
         let target_color = if color_idx.player == 0 {
             GRAY
         } else {
-            player_config.players[color_idx.player - 1].color()
+            let Some(player) = player_config.players.get(color_idx.player - 1) else {
+                continue;
+            };
+            player.color()
         };
         material.0 = target_color;
     }
