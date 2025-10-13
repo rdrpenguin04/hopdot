@@ -308,7 +308,7 @@ pub fn main() {
     .add_plugins(menu::plugin)
     .add_plugins(ui_menu::plugin);
 
-    #[cfg(feature = "dev")]
+    #[cfg(feature = "bevy-inspector-egui")]
     {
         use bevy_inspector_egui::{
             bevy_egui::EguiPlugin,

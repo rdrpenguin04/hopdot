@@ -25,7 +25,8 @@ common.workspace = true
 bevy-inspector-egui = { version = "0.34.0", optional = true }
 
 [features]
-dev = ["bevy-inspector-egui"]
+# dev = ["bevy-inspector-egui"] # apparently egui just breaks a lot of things
+dev = []
 
 [target.wasm32-unknown-unknown.dependencies]
 getrandom = { version = "0.3", features = ["wasm_js"] }
