@@ -1,11 +1,18 @@
 use bevy::prelude::*;
 
 use crate::{
-    Config,
+    PlayerConfigEntry,
     menu::{MainMenuSubState, MenuState},
+    ui_menu::CustomConfig,
 };
 
 use super::{CustomGameSetupUiTree, support::*};
+
+#[derive(Component)]
+pub struct PlayerConfigPlusLabel;
+
+#[derive(Component)]
+pub struct PlayerConfigMinusLabel;
 
 pub fn menu(ga: &GameAssets) -> impl Bundle {
     #[derive(Component)]
@@ -33,6 +40,52 @@ pub fn menu(ga: &GameAssets) -> impl Bundle {
                     ..default()
                 },
                 children![
+                    h2(ga, "Players"),
+                    player_config(ga, 0),
+                    player_config(ga, 1),
+                    player_config(ga, 2),
+                    player_config(ga, 3),
+                    (
+                        Node {
+                            margin: UiRect::vertical(Val::Px(5.0)),
+                            ..default()
+                        },
+                        children![
+                            (
+                                PlayerConfigPlusLabel,
+                                button_with_bg(ga, "+", Color::srgb(0.2, 0.2, 0.2)),
+                                observe(move |_: On<Pointer<Click>>, mut config: ResMut<CustomConfig>| {
+                                    for player in config.players.iter_mut() {
+                                        if player.is_disabled() {
+                                            player.to_human();
+                                            break;
+                                        }
+                                    }
+                                })
+                            ),
+                            (
+                                PlayerConfigMinusLabel,
+                                button_with_bg(ga, "-", Color::srgb(0.2, 0.2, 0.2)),
+                                observe(move |_: On<Pointer<Click>>, mut config: ResMut<CustomConfig>| {
+                                    for player in config.players.iter_mut().rev() {
+                                        if !player.is_disabled() {
+                                            player.to_disabled();
+                                            break;
+                                        }
+                                    }
+                                })
+                            ),
+                        ]
+                    )
+                ],
+            ),
+            (
+                Node {
+                    margin: UiRect::top(Val::Px(5.0)),
+                    display: Display::Block,
+                    ..default()
+                },
+                children![
                     h2(ga, "Grid Size"),
                     (
                         Node {
@@ -47,7 +100,7 @@ pub fn menu(ga: &GameAssets) -> impl Bundle {
                             (
                                 left_button(ga),
                                 observe(
-                                    |_: On<Pointer<Click>>, mut config: ResMut<Config>, mut width_text: Query<&mut Text, With<WidthText>>| {
+                                    |_: On<Pointer<Click>>, mut config: ResMut<CustomConfig>, mut width_text: Query<&mut Text, With<WidthText>>| {
                                         config.grid_size.0 -= 1;
                                         if config.grid_size.0 < 1 {
                                             config.grid_size.0 = 1;
@@ -60,7 +113,7 @@ pub fn menu(ga: &GameAssets) -> impl Bundle {
                             (
                                 right_button(ga),
                                 observe(
-                                    |_: On<Pointer<Click>>, mut config: ResMut<Config>, mut width_text: Query<&mut Text, With<WidthText>>| {
+                                    |_: On<Pointer<Click>>, mut config: ResMut<CustomConfig>, mut width_text: Query<&mut Text, With<WidthText>>| {
                                         config.grid_size.0 += 1;
                                         if config.grid_size.0 > 20 {
                                             config.grid_size.0 = 20;
@@ -84,7 +137,7 @@ pub fn menu(ga: &GameAssets) -> impl Bundle {
                             (
                                 left_button(ga),
                                 observe(
-                                    |_: On<Pointer<Click>>, mut config: ResMut<Config>, mut height_text: Query<&mut Text, With<HeightText>>| {
+                                    |_: On<Pointer<Click>>, mut config: ResMut<CustomConfig>, mut height_text: Query<&mut Text, With<HeightText>>| {
                                         config.grid_size.1 -= 1;
                                         if config.grid_size.1 < 1 {
                                             config.grid_size.1 = 1;
@@ -97,7 +150,7 @@ pub fn menu(ga: &GameAssets) -> impl Bundle {
                             (
                                 right_button(ga),
                                 observe(
-                                    |_: On<Pointer<Click>>, mut config: ResMut<Config>, mut height_text: Query<&mut Text, With<HeightText>>| {
+                                    |_: On<Pointer<Click>>, mut config: ResMut<CustomConfig>, mut height_text: Query<&mut Text, With<HeightText>>| {
                                         config.grid_size.1 += 1;
                                         if config.grid_size.1 > 20 {
                                             config.grid_size.1 = 20;
@@ -113,4 +166,138 @@ pub fn menu(ga: &GameAssets) -> impl Bundle {
             back_to_menu::<CustomGameSetupUiTree>(ga, "Back to menu", MenuState::Main(Some(MainMenuSubState::StartGame)))
         ],
     )
+}
+
+#[derive(Component)]
+pub struct PlayerConfigLabel(usize);
+
+#[derive(Component)]
+pub struct PlayerConfigHumanLabel(usize);
+
+#[derive(Component)]
+pub struct PlayerConfigBotLabel(usize);
+
+#[derive(Component)]
+pub struct PlayerConfigBotLevelLabel {
+    player_idx: usize,
+    level: usize,
+}
+
+fn player_config(ga: &GameAssets, player_idx: usize) -> impl Bundle {
+    (
+        Node {
+            display: Display::Flex,
+            margin: UiRect::vertical(Val::Px(5.0)),
+            ..default()
+        },
+        PlayerConfigLabel(player_idx),
+        children![
+            (
+                PlayerConfigHumanLabel(player_idx),
+                Node {
+                    display: Display::Flex,
+                    ..default()
+                },
+                children![(
+                    button_with_bg(ga, "Human", Color::srgb(0.2, 0.2, 0.2)),
+                    observe(move |_: On<Pointer<Click>>, mut config: ResMut<CustomConfig>| {
+                        config.players[player_idx].to_bot();
+                    })
+                )],
+            ),
+            (
+                PlayerConfigBotLabel(player_idx),
+                Node {
+                    display: Display::Flex,
+                    ..default()
+                },
+                children![
+                    (
+                        button_with_bg(ga, "Bot", Color::srgb(0.2, 0.2, 0.2)),
+                        observe(move |_: On<Pointer<Click>>, mut config: ResMut<CustomConfig>| {
+                            config.players[player_idx].to_human();
+                        }),
+                    ),
+                    (
+                        PlayerConfigBotLevelLabel { player_idx, level: 0 },
+                        button_with_bg(ga, "Easiest", Color::srgb(0.2, 0.2, 0.2)),
+                        observe(move |_: On<Pointer<Click>>, mut config: ResMut<CustomConfig>| {
+                            config.players[player_idx].set_level(0);
+                        }),
+                    ),
+                    (
+                        PlayerConfigBotLevelLabel { player_idx, level: 1 },
+                        button_with_bg(ga, "Easy", Color::srgb(0.2, 0.2, 0.2)),
+                        observe(move |_: On<Pointer<Click>>, mut config: ResMut<CustomConfig>| {
+                            config.players[player_idx].set_level(1);
+                        }),
+                    ),
+                    (
+                        PlayerConfigBotLevelLabel { player_idx, level: 2 },
+                        button_with_bg(ga, "Medium", Color::srgb(0.2, 0.2, 0.2)),
+                        observe(move |_: On<Pointer<Click>>, mut config: ResMut<CustomConfig>| {
+                            config.players[player_idx].set_level(2);
+                        }),
+                    ),
+                    (
+                        PlayerConfigBotLevelLabel { player_idx, level: 3 },
+                        button_with_bg(ga, "Hard", Color::srgb(0.2, 0.2, 0.2)),
+                        observe(move |_: On<Pointer<Click>>, mut config: ResMut<CustomConfig>| {
+                            config.players[player_idx].set_level(3);
+                        }),
+                    ),
+                ],
+            ),
+        ],
+    )
+}
+
+pub fn render_player_config(
+    mut config: ResMut<CustomConfig>,
+    mut node: ParamSet<(
+        Query<&mut Node, With<PlayerConfigMinusLabel>>,
+        Query<&mut Node, With<PlayerConfigPlusLabel>>,
+        Query<(&mut Node, &PlayerConfigLabel)>,
+        Query<(&mut Node, &PlayerConfigHumanLabel)>,
+        Query<(&mut Node, &PlayerConfigBotLabel)>,
+    )>,
+    mut button_colors: Query<(&mut BackgroundColor, &PlayerConfigBotLevelLabel)>,
+) {
+    if config.players.len() == 0 {
+        return;
+    } else if config.players.len() < 4 {
+        assert!(config.players.len() == 2);
+        config.players.push(PlayerConfigEntry::Disabled {
+            _color: Color::srgb(1.0, 0.0, 1.0),
+            _name: "Player 3".into(),
+            _level: 0,
+        });
+        config.players.push(PlayerConfigEntry::Disabled {
+            _color: Color::srgb(0.0, 1.0, 1.0),
+            _name: "Player 4".into(),
+            _level: 0,
+        });
+    }
+    node.p0().single_mut().unwrap().display = if config.players[2].is_disabled() { Display::None } else { Display::Block };
+    node.p1().single_mut().unwrap().display = if config.players[3].is_disabled() { Display::Block } else { Display::None };
+    for (mut node, player) in &mut node.p2() {
+        node.display = if config.players[player.0].is_disabled() {
+            Display::None
+        } else {
+            Display::Flex
+        };
+    }
+    for (mut node, player) in &mut node.p3() {
+        node.display = if config.players[player.0].is_human() { Display::Flex } else { Display::None };
+    }
+    for (mut node, player) in &mut node.p4() {
+        node.display = if config.players[player.0].is_bot() { Display::Flex } else { Display::None };
+    }
+    for (mut color, PlayerConfigBotLevelLabel { player_idx, level }) in &mut button_colors {
+        color.0 = if config.players[*player_idx].level() == *level {
+            Color::srgba(0.4, 0.4, 0.4, color.0.alpha())
+        } else {
+            Color::srgba(0.2, 0.2, 0.2, color.0.alpha())
+        };
+    }
 }

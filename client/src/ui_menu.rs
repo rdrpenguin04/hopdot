@@ -8,7 +8,7 @@ mod settings;
 
 use bevy::{prelude::*, window::PrimaryWindow};
 
-use crate::{Config, GameAssets, PlayerConfigEntry, menu::MenuRadios, ui_menu::rules::RulesPageNumber};
+use crate::{menu::MenuRadios, ui_menu::{custom_game_setup::render_player_config, rules::RulesPageNumber}, Config, GameAssets, PlayerConfigEntry};
 
 #[derive(Component)]
 pub struct CreditsUiTree;
@@ -30,7 +30,11 @@ pub struct SettingsUiTree;
 
 pub fn plugin(app: &mut App) {
     app.insert_resource(RulesPageNumber(1))
-        .add_systems(Update, (update_config_from_buttons, update_ui_scale))
+        .insert_resource(CustomConfig(Config {
+            players: vec![],
+            grid_size: (6, 6),
+        }))
+        .add_systems(Update, (update_config_from_buttons, update_ui_scale, render_player_config))
         .add_systems(Startup, |mut commands: Commands, ga: Res<GameAssets>| {
             commands.spawn(custom_game_setup::menu(&ga));
             commands.spawn(game_end::menu(&ga));
@@ -55,12 +59,15 @@ fn update_ui_scale(mut ui_scale: ResMut<UiScale>, windows: Query<&Window, With<P
     };
 }
 
+#[derive(Deref, DerefMut, Resource)]
+pub struct CustomConfig(pub Config);
+
 // play modes are:
 // * PvP: 1
 // * PvB: 0 (default)
 // * BvB: 2
 // * Custom: 3
-fn update_config_from_buttons(mut radios: ResMut<MenuRadios>, mut config: ResMut<Config>) {
+fn update_config_from_buttons(mut radios: ResMut<MenuRadios>, mut config: ResMut<Config>, custom_config: Res<CustomConfig>) {
     let Some(play_mode) = radios.radios.get("game-type").map(|x| x.value()) else {
         return;
     };
@@ -79,27 +86,39 @@ fn update_config_from_buttons(mut radios: ResMut<MenuRadios>, mut config: ResMut
                 PlayerConfigEntry::Bot {
                     color: Color::srgb(0.0, 1.0, 0.0),
                     level: bot_level,
+                    _name: String::new(),
                 }
             } else {
                 PlayerConfigEntry::Human {
                     color: Color::srgb(0.0, 1.0, 0.0),
                     name: "Player 1".into(),
+                    _level: 0,
                 }
             },
             if play_mode == 1 {
                 PlayerConfigEntry::Human {
                     color: Color::srgb(0.0, 0.0, 1.0),
                     name: "Player 2".into(),
+                    _level: 0,
                 }
             } else {
                 PlayerConfigEntry::Bot {
                     color: Color::srgb(0.0, 0.0, 1.0),
                     level: bot_level,
+                    _name: String::new(),
                 }
             },
         ];
+        config.grid_size = (6, 6);
     } else {
-        // TODO: read from expanded custom config
+        config.players.clear();
+        custom_config
+            .players
+            .iter()
+            .cloned()
+            .filter(|x| !matches!(x, PlayerConfigEntry::Disabled { .. }))
+            .collect_into(&mut config.players);
+        config.grid_size = custom_config.grid_size;
     }
     // config.players = vec![
     //     PlayerConfigEntry::Human {

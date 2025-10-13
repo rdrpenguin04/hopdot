@@ -1,3 +1,5 @@
+#![feature(iter_collect_into)]
+
 pub mod ai;
 pub mod anim;
 pub mod menu;
@@ -18,6 +20,7 @@ use bevy_rand::plugin::EntropyPlugin;
 use bevy_skein::SkeinPlugin;
 
 use crate::{
+    ai::Ais,
     anim::{Bouncing, SmoothingSettings, TargetMaterialColor, TargetTransform, TargetUiOpacity},
     menu::MenuState,
     projection::PerspectiveMinAspect,
@@ -129,13 +132,74 @@ pub struct EndGame {
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect, States)]
 pub struct CurrentTurn(usize);
 
-#[derive(Clone, Reflect)]
+#[derive(Clone, Debug, Reflect)]
 pub enum PlayerConfigEntry {
-    Human { color: Color, name: String },
-    Bot { color: Color, level: usize },
+    Human { color: Color, name: String, _level: usize },
+    Bot { color: Color, _name: String, level: usize },
+    Disabled { _color: Color, _name: String, _level: usize },
 }
 
-#[derive(Resource, Reflect)]
+impl PlayerConfigEntry {
+    pub fn is_human(&self) -> bool {
+        matches!(self, Self::Human { .. })
+    }
+    pub fn is_bot(&self) -> bool {
+        matches!(self, Self::Bot { .. })
+    }
+    pub fn is_disabled(&self) -> bool {
+        matches!(self, Self::Disabled { .. })
+    }
+
+    pub fn to_human(&mut self) {
+        *self = Self::Human {
+            color: self.color(),
+            name: self.name().to_owned(),
+            _level: self.level(),
+        };
+    }
+
+    pub fn to_bot(&mut self) {
+        *self = Self::Bot {
+            color: self.color(),
+            _name: self.name().to_owned(),
+            level: self.level(),
+        };
+    }
+
+    pub fn to_disabled(&mut self) {
+        *self = Self::Disabled {
+            _color: self.color(),
+            _name: self.name().to_owned(),
+            _level: self.level(),
+        };
+    }
+
+    pub fn color(&self) -> Color {
+        match self {
+            Self::Human { color, .. } | Self::Bot { color, .. } | Self::Disabled { _color: color, .. } => *color,
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Human { name, .. } | Self::Bot { _name: name, .. } | Self::Disabled { _name: name, .. } => name,
+        }
+    }
+
+    pub fn level(&self) -> usize {
+        match self {
+            Self::Human { _level: level, .. } | Self::Bot { level, .. } | Self::Disabled { _level: level, .. } => *level,
+        }
+    }
+
+    pub fn set_level(&mut self, new_level: usize) {
+        match self {
+            Self::Human { _level: level, .. } | Self::Bot { level, .. } | Self::Disabled { _level: level, .. } => *level = new_level,
+        }
+    }
+}
+
+#[derive(Clone, Resource, Reflect)]
 pub struct Config {
     pub players: Vec<PlayerConfigEntry>,
     pub grid_size: (usize, usize),
@@ -262,6 +326,7 @@ pub fn main() {
 
     app.init_resource::<GameAssets>()
         .init_resource::<VisualGrid>()
+        .init_resource::<Ais>()
         .insert_resource(AmbientLight {
             brightness: 1000.0,
             ..default()
@@ -273,25 +338,11 @@ pub fn main() {
                 PlayerConfigEntry::Human {
                     color: Color::srgb(0.0, 1.0, 0.0),
                     name: "Player 1".into(),
+                    _level: 0,
                 },
-                // PlayerConfigEntry::Human {
-                //     color: Color::srgb(0.0, 0.0, 1.0),
-                //     name: "Player 2".into(),
-                // },
-                // PlayerConfigEntry::Bot {
-                //     color: Color::srgb(1.0, 0.0, 0.0),
-                //     level: 2,
-                // },
-                // PlayerConfigEntry::Bot {
-                //     color: Color::srgb(0.0, 1.0, 1.0),
-                //     level: 2,
-                // },
-                // PlayerConfigEntry::Bot {
-                //     color: Color::srgb(0.0, 1.0, 0.0),
-                //     level: 2,
-                // },
                 PlayerConfigEntry::Bot {
                     color: Color::srgb(0.0, 0.0, 1.0),
+                    _name: "Player 2".into(),
                     level: 0,
                 },
             ],
@@ -830,6 +881,7 @@ pub fn scatter_tick(
         next_state.set(match player_config.players[next_turn_idx] {
             PlayerConfigEntry::Bot { .. } => GameOperation::Bot,
             PlayerConfigEntry::Human { .. } => GameOperation::Human,
+            _ => unreachable!(), // Disabled should never be in the final config
         });
         next_turn.set(CurrentTurn(next_turn_idx + 1)); // current_turn is 1-indexed
     }
@@ -848,6 +900,7 @@ pub fn game_ended(
     mut game_end_ui: Query<&mut Visibility, With<GameEndUiTree>>,
     mut game_end_text: Query<&mut Text, With<GameEndText>>,
     current_turn: Res<State<CurrentTurn>>,
+    // ais: Res<Ais>,
 ) {
     if let Ok(mut camera_pos) = camera_pos.single_mut() {
         let (width, height) = config.grid_size;
@@ -855,6 +908,20 @@ pub fn game_ended(
         *camera_pos = TargetTransform(Transform::from_xyz(0.0, max_dim as f32, 2.0 * max_dim as f32).looking_at(Vec3::ZERO, Vec3::Y));
         ui_opacity.0 = 1.0;
         *game_end_ui.single_mut().unwrap() = Visibility::Visible;
+        // let player = &config.players[current_turn.0 - 1];
+        // game_end_text.single_mut().unwrap().0 = format!(
+        //     "Player {}{} wins!",
+        //     current_turn.0,
+        //     if player.is_human() {
+        //         if player.name() == &format!("Player {}", current_turn.0) {
+        //             "".into()
+        //         } else {
+        //             format!(" ({})", player.name())
+        //         }
+        //     } else {
+        //         format!(" ({})", ais[player.level()].name())
+        //     }
+        // );
         game_end_text.single_mut().unwrap().0 = format!("Player {} wins!", current_turn.0);
     }
 }

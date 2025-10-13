@@ -6,9 +6,9 @@ use bevy::{
 };
 
 use crate::{
-    MainState, NeedNewBoard, add_hover_observers,
+    Config, MainState, NeedNewBoard, add_hover_observers,
     anim::{SmoothingSettings, TargetMaterialColor, TargetTransform, TargetUiOpacity},
-    ui_menu::{CreditsUiTree, CustomGameSetupUiTree, RulesUiTree, SettingsUiTree},
+    ui_menu::{CreditsUiTree, CustomConfig, CustomGameSetupUiTree, RulesUiTree, SettingsUiTree},
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect)]
@@ -249,10 +249,15 @@ fn insert_menu_element(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
                     |_: On<Pointer<Click>>,
                      mut next_state: ResMut<NextState<MainState>>,
                      mut game_setup_ui_tree: Query<&mut Visibility, With<CustomGameSetupUiTree>>,
-                     mut ui_opacity: ResMut<TargetUiOpacity>| {
+                     mut ui_opacity: ResMut<TargetUiOpacity>,
+                     config: Res<Config>,
+                     mut custom_config: ResMut<CustomConfig>| {
                         next_state.set(MainState::DimForUi);
                         *game_setup_ui_tree.single_mut().unwrap() = Visibility::Visible;
                         ui_opacity.0 = 1.0;
+                        if custom_config.players.len() == 0 {
+                            custom_config.clone_from(&config);
+                        }
                     },
                 );
             }

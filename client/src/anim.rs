@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{CellColor, Config, Dot, DotCell, GRAY, PlayerConfigEntry};
+use crate::{CellColor, Config, Dot, DotCell, GRAY};
 
 #[derive(Component, Deref, DerefMut, Reflect)]
 #[reflect(Component)]
@@ -93,10 +93,7 @@ fn animate_cell_colors(mut cells: Query<(&mut TargetMaterialColor, &CellColor)>,
         let target_color = if color_idx.player == 0 {
             GRAY
         } else {
-            match player_config.players[color_idx.player - 1] {
-                PlayerConfigEntry::Human { color, .. } => color,
-                PlayerConfigEntry::Bot { color, .. } => color,
-            }
+            player_config.players[color_idx.player - 1].color()
         };
         material.0 = target_color;
     }

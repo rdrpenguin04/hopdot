@@ -10,6 +10,9 @@ use common::{
 
 use crate::{CellColor, Config, CurrentTurn, Dot, DotCell, GameAssets, GameOperation, GridTray, PlayerConfigEntry, VisualGrid, spawn_dot};
 
+#[derive(Resource, Default, Deref, DerefMut)]
+pub struct Ais(Vec<Box<dyn Ai>>);
+
 pub fn tick_ai(
     mut commands: Commands,
     config: Res<Config>,
@@ -23,7 +26,7 @@ pub fn tick_ai(
     time: Res<Time>,
     mut timer: Local<Timer>,
     grid_tray: Query<Entity, With<GridTray>>,
-    mut ais: Local<Vec<Box<dyn Ai>>>,
+    mut ais: ResMut<Ais>,
 ) {
     if ais.is_empty() {
         // Init
