@@ -482,6 +482,7 @@ fn run_splash(
     }
 }
 
+#[allow(clippy::collapsible_if)] // TODO
 fn esc_to_menu(
     key_input: Res<ButtonInput<KeyCode>>,
     mut main_state: ResMut<NextState<MainState>>,

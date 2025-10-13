@@ -255,7 +255,7 @@ fn insert_menu_element(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
                         next_state.set(MainState::DimForUi);
                         *game_setup_ui_tree.single_mut().unwrap() = Visibility::Visible;
                         ui_opacity.0 = 1.0;
-                        if custom_config.players.len() == 0 {
+                        if custom_config.players.is_empty() {
                             custom_config.clone_from(&config);
                         }
                     },
@@ -361,10 +361,10 @@ fn handle_continue_button(
     mut continue_button: Query<&mut Visibility, With<ContinueButton>>,
     need_new_board: Res<State<NeedNewBoard>>,
 ) {
-    if matches!(cur_menu.as_ref().map(|x| ***x), Some(MenuState::Main(Some(MainMenuSubState::Main)))) {
-        if let Ok(mut continue_button) = continue_button.single_mut() {
-            *continue_button = if need_new_board.0 { Visibility::Hidden } else { Visibility::Inherited };
-        }
+    if matches!(cur_menu.as_ref().map(|x| ***x), Some(MenuState::Main(Some(MainMenuSubState::Main))))
+        && let Ok(mut continue_button) = continue_button.single_mut()
+    {
+        *continue_button = if need_new_board.0 { Visibility::Hidden } else { Visibility::Inherited };
     }
 }
 

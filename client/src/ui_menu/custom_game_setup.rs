@@ -263,7 +263,7 @@ pub fn render_player_config(
     )>,
     mut button_colors: Query<(&mut BackgroundColor, &PlayerConfigBotLevelLabel)>,
 ) {
-    if config.players.len() == 0 {
+    if config.players.is_empty() {
         return;
     } else if config.players.len() < 4 {
         assert!(config.players.len() == 2);

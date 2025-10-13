@@ -119,8 +119,8 @@ fn update_config_from_buttons(mut radios: ResMut<MenuRadios>, mut config: ResMut
         custom_config
             .players
             .iter()
-            .cloned()
             .filter(|x| !matches!(x, PlayerConfigEntry::Disabled { .. }))
+            .cloned()
             .collect_into(&mut config.players);
         config.grid_size = custom_config.grid_size;
     }
