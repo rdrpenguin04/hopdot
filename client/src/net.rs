@@ -118,10 +118,7 @@ fn process_net_inbound(
     mut cells: Query<(&DotCell, &mut CellColor, &Transform)>,
     game_assets: Res<GameAssets>,
     grid_tray: Query<Entity, With<GridTray>>,
-    (mut next_game_state, mut need_new_board): (
-        ResMut<NextState<GameOperation>>,
-        ResMut<NextState<NeedNewBoard>>,
-    ),
+    (mut next_game_state, mut need_new_board): (ResMut<NextState<GameOperation>>, ResMut<NextState<NeedNewBoard>>),
     mut local_me: Local<u8>,
 ) {
     while let Ok(message) = r_c.try_recv() {
