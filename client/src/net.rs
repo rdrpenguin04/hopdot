@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy_defer::{AsyncCommandsExtension as _, AsyncWorld, fetch};
 
 #[cfg(not(target_family = "wasm"))]
 use std::pin::Pin;
@@ -15,7 +16,7 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    CellColor, Config, Dot, DotCell, GameAssets, GameOperation, GridTray, MainState, PlayerConfigEntry, VisualGrid,
+    CellColor, Config, Dot, DotCell, GameAssets, GameOperation, GridTray, MainState, NeedNewBoard, PlayerConfigEntry, VisualGrid,
     anim::TargetUiOpacity,
     menu::MenuRadios,
     spawn_dot,
@@ -108,10 +109,8 @@ fn process_net_inbound(
     (r_c, s_s): (Res<NetClientboundReceiver>, Res<NetServerboundSender>),
     mut server_url: ResMut<ServerUrl>,
     #[cfg(not(target_family = "wasm"))] runtime: Res<TokioTasksRuntime>,
-    mut config: ResMut<Config>,
-    mut radios: ResMut<MenuRadios>,
+    (mut config, mut radios): (ResMut<Config>, ResMut<MenuRadios>),
     mut message_writer: MessageWriter<NetMessage>,
-    mut main_state: ResMut<NextState<MainState>>,
     mut commands: Commands,
     mut ui_opacity: ResMut<TargetUiOpacity>,
     (host_ui_tree, join_ui_tree): (Query<Entity, With<HostGameUiTree>>, Query<Entity, With<JoinGameUiTree>>),
@@ -119,7 +118,10 @@ fn process_net_inbound(
     mut cells: Query<(&DotCell, &mut CellColor, &Transform)>,
     game_assets: Res<GameAssets>,
     grid_tray: Query<Entity, With<GridTray>>,
-    mut next_game_state: ResMut<NextState<GameOperation>>,
+    (mut next_game_state, mut need_new_board): (
+        ResMut<NextState<GameOperation>>,
+        ResMut<NextState<NeedNewBoard>>,
+    ),
     mut local_me: Local<u8>,
 ) {
     while let Ok(message) = r_c.try_recv() {
@@ -146,8 +148,13 @@ fn process_net_inbound(
                     PlayerConfigEntry::default_for_player(1).as_human().as_online(),
                     PlayerConfigEntry::default_for_player(2).as_human().as_online(),
                 ];
-                s_s.force_send(NetManagerMessage::JoinGame { code, server }).unwrap();
-                main_state.set(MainState::Game);
+                need_new_board.set(NeedNewBoard(true));
+                commands.spawn_task(|| async move {
+                    fetch!(NetServerboundSender).with(|s_s| s_s.force_send(NetManagerMessage::JoinGame { code, server }).unwrap());
+                    AsyncWorld.sleep(1.5).await;
+                    fetch!(NextState<MainState>).with(|x| x.set(MainState::Game));
+                    Ok(())
+                });
                 fade_out_ui(&mut commands, &mut ui_opacity, &host_ui_tree);
                 fade_out_ui(&mut commands, &mut ui_opacity, &join_ui_tree);
                 info!("{:?}", config.players);

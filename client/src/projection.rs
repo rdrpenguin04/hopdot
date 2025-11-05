@@ -38,6 +38,7 @@ impl CameraProjection for PerspectiveMinAspect {
     }
 
     fn get_frustum_corners(&self, z_near: f32, z_far: f32) -> [Vec3A; 8] {
+        // I'm realizing this might technically be wrong, and we only haven't noticed because it hasn't come up
         self.inner.get_frustum_corners(z_near, z_far)
     }
 }
