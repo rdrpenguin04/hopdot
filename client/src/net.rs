@@ -22,7 +22,7 @@ use crate::{
     ui_menu::{HostGameUiTree, JoinGameUiTree, support::fade_out_ui},
 };
 
-const SERVER_LIST: [(&'static str, &'static str); 3] = [
+const SERVER_LIST: [(&str, &str); 3] = [
     ("Local server", "ws://localhost:8080"),
     ("LC HQ", "wss://hopdot.lcdev.xyz"),
     ("New LC HQ", "ws://hopdot.lc"),
@@ -498,7 +498,7 @@ async fn net_manager_main(rx: Receiver<NetManagerMessage>, tx: Sender<NetMessage
                     let _ = x.close().await;
                 }
                 if let Some(mut x) = game_connection.take() {
-                    let _ = x.send(Message::Binary(bson::serialize_to_vec(&GameServerbound::Resign).unwrap()));
+                    let _ = x.send(Message::Binary(bson::serialize_to_vec(&GameServerbound::Resign).unwrap())).await;
                     let _ = x.close().await;
                 }
             }
