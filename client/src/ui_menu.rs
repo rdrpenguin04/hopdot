@@ -51,7 +51,16 @@ pub fn plugin(app: &mut App) {
             players: vec![],
             grid_size: (6, 6),
         }))
-        .add_systems(Update, (update_config_from_buttons, update_ui_scale, render_player_config, update_net_menus, game_hud::run_menu))
+        .add_systems(
+            Update,
+            (
+                update_config_from_buttons,
+                update_ui_scale,
+                render_player_config,
+                update_net_menus,
+                game_hud::run_menu,
+            ),
+        )
         .add_systems(Startup, |mut commands: Commands, ga: Res<GameAssets>| {
             commands.spawn(custom_game_setup::menu(&ga));
             commands.spawn(game_end::menu(&ga));

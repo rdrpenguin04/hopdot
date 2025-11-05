@@ -25,7 +25,12 @@ use bevy_skein::SkeinPlugin;
 use bevy_tokio_tasks::TokioTasksPlugin;
 
 use crate::{
-    ai::Ais, anim::{Bouncing, SmoothingSettings, TargetMaterialColor, TargetTransform, TargetUiOpacity}, menu::MenuState, net::{NetManagerMessage, NetServerboundSender}, projection::PerspectiveMinAspect, ui_menu::{GameEndText, GameEndUiTree, GameHudUiTree, support::fade_out_ui}
+    ai::Ais,
+    anim::{Bouncing, SmoothingSettings, TargetMaterialColor, TargetTransform, TargetUiOpacity},
+    menu::MenuState,
+    net::{NetManagerMessage, NetServerboundSender},
+    projection::PerspectiveMinAspect,
+    ui_menu::{GameEndText, GameEndUiTree, GameHudUiTree, support::fade_out_ui},
 };
 
 #[derive(Resource, Reflect)]
@@ -788,7 +793,8 @@ fn spawn_cell(
                   state: Option<Res<State<GameOperation>>>,
                   next_state: Option<ResMut<NextState<GameOperation>>>,
                   current_turn: Option<Res<State<CurrentTurn>>>,
-                  grid_tray: Query<Entity, With<GridTray>>, net_tx: Res<NetServerboundSender>,| {
+                  grid_tray: Query<Entity, With<GridTray>>,
+                  net_tx: Res<NetServerboundSender>| {
                 if let (Some(state), Some(mut next_state), Some(current_turn)) = (state, next_state, current_turn)
                     && *state == GameOperation::Human
                 {
@@ -799,7 +805,12 @@ fn spawn_cell(
                             .entity(trigger.original_event_target())
                             .with_related::<Dot>((spawn_dot(x, z, &game_assets), ChildOf(grid_tray.single().unwrap())));
                         next_state.set(GameOperation::Animating);
-                        net_tx.force_send(NetManagerMessage::Move { x: pos.0 as u8, y: pos.1 as u8 }).unwrap();
+                        net_tx
+                            .force_send(NetManagerMessage::Move {
+                                x: pos.0 as u8,
+                                y: pos.1 as u8,
+                            })
+                            .unwrap();
                     }
                 }
             },
