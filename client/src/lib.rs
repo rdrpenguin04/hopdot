@@ -1,12 +1,15 @@
 #![feature(iter_collect_into)]
+#![feature(iter_intersperse)]
 
 pub mod ai;
 pub mod anim;
 pub mod menu;
+pub mod net;
 pub mod projection;
 pub mod ui_menu;
 
 use std::{
+    iter,
     ops::{Index, IndexMut},
     time::Duration,
 };
@@ -18,13 +21,11 @@ use bevy_defer::{AsyncCommandsExtension, AsyncPlugin, AsyncWorld, fetch};
 use bevy_prng::WyRand;
 use bevy_rand::plugin::EntropyPlugin;
 use bevy_skein::SkeinPlugin;
+#[cfg(not(target_family = "wasm"))]
+use bevy_tokio_tasks::TokioTasksPlugin;
 
 use crate::{
-    ai::Ais,
-    anim::{Bouncing, SmoothingSettings, TargetMaterialColor, TargetTransform, TargetUiOpacity},
-    menu::MenuState,
-    projection::PerspectiveMinAspect,
-    ui_menu::{GameEndText, GameEndUiTree},
+    ai::Ais, anim::{Bouncing, SmoothingSettings, TargetMaterialColor, TargetTransform, TargetUiOpacity}, menu::MenuState, net::{NetManagerMessage, NetServerboundSender}, projection::PerspectiveMinAspect, ui_menu::{GameEndText, GameEndUiTree, GameHudUiTree, support::fade_out_ui}
 };
 
 #[derive(Resource, Reflect)]
@@ -121,6 +122,8 @@ pub enum GameOperation {
     Animating,
     Human,
     Bot,
+    OnlinePlayer,
+    Connecting,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect, SubStates)]
@@ -134,9 +137,24 @@ pub struct CurrentTurn(usize);
 
 #[derive(Clone, Debug, Reflect)]
 pub enum PlayerConfigEntry {
-    Human { color: Color, name: String, _level: usize },
-    Bot { color: Color, _name: String, level: usize },
-    Disabled { _color: Color, _name: String, _level: usize },
+    Human {
+        color: Color,
+        name: String,
+        _level: usize,
+        online: bool,
+    },
+    Bot {
+        color: Color,
+        _name: String,
+        level: usize,
+        online: bool,
+    },
+    Disabled {
+        _color: Color,
+        _name: String,
+        _level: usize,
+        _online: bool,
+    },
 }
 
 impl PlayerConfigEntry {
@@ -155,6 +173,7 @@ impl PlayerConfigEntry {
             color: self.color(),
             name: self.name().to_owned(),
             _level: self.level(),
+            online: self.online(),
         };
     }
 
@@ -163,6 +182,7 @@ impl PlayerConfigEntry {
             color: self.color(),
             _name: self.name().to_owned(),
             level: self.level(),
+            online: self.online(),
         };
     }
 
@@ -171,7 +191,34 @@ impl PlayerConfigEntry {
             _color: self.color(),
             _name: self.name().to_owned(),
             _level: self.level(),
+            _online: self.online(),
         };
+    }
+
+    pub fn to_online(&mut self) {
+        match self {
+            Self::Human { online, .. } | Self::Bot { online, .. } | Self::Disabled { _online: online, .. } => *online = true,
+        }
+    }
+
+    pub fn as_human(mut self) -> Self {
+        self.to_human();
+        self
+    }
+
+    pub fn as_bot(mut self) -> Self {
+        self.to_bot();
+        self
+    }
+
+    pub fn as_disabled(mut self) -> Self {
+        self.to_disabled();
+        self
+    }
+
+    pub fn as_online(mut self) -> Self {
+        self.to_online();
+        self
     }
 
     pub fn color(&self) -> Color {
@@ -192,9 +239,51 @@ impl PlayerConfigEntry {
         }
     }
 
+    pub fn online(&self) -> bool {
+        match self {
+            Self::Human { online, .. } | Self::Bot { online, .. } | Self::Disabled { _online: online, .. } => *online,
+        }
+    }
+
     pub fn set_level(&mut self, new_level: usize) {
         match self {
             Self::Human { _level: level, .. } | Self::Bot { level, .. } | Self::Disabled { _level: level, .. } => *level = new_level,
+        }
+    }
+
+    pub fn set_online(&mut self, new_online: bool) {
+        match self {
+            Self::Human { online, .. } | Self::Bot { online, .. } | Self::Disabled { _online: online, .. } => *online = new_online,
+        }
+    }
+
+    pub fn default_for_player(player: usize) -> Self {
+        match player {
+            1 => PlayerConfigEntry::Human {
+                color: Color::srgb(0.0, 1.0, 0.0),
+                name: "Player 1".into(),
+                _level: 0,
+                online: false,
+            },
+            2 => PlayerConfigEntry::Bot {
+                color: Color::srgb(0.0, 0.0, 1.0),
+                _name: "Player 2".into(),
+                level: 0,
+                online: false,
+            },
+            3 => PlayerConfigEntry::Disabled {
+                _color: Color::srgb(1.0, 0.0, 1.0),
+                _name: "Player 3".into(),
+                _level: 0,
+                _online: false,
+            },
+            4 => PlayerConfigEntry::Disabled {
+                _color: Color::srgb(0.0, 1.0, 1.0),
+                _name: "Player 4".into(),
+                _level: 0,
+                _online: false,
+            },
+            _ => panic!("invalid player number"),
         }
     }
 }
@@ -288,6 +377,13 @@ const TABLE_DARK_COLOR: Color = Color::Srgba(Srgba::rgb(0.0, 0.005, 0.008));
 #[reflect(Component)]
 pub struct TableMaterial;
 
+#[derive(Resource, Reflect, Default)]
+#[reflect(Resource)]
+pub struct GameCode(Option<String>);
+
+#[derive(Component)]
+pub struct GameCodeText;
+
 #[bevy_main]
 pub fn main() {
     let mut app = App::new();
@@ -306,7 +402,11 @@ pub fn main() {
     .add_plugins(SkeinPlugin::default())
     .add_plugins(anim::plugin)
     .add_plugins(menu::plugin)
-    .add_plugins(ui_menu::plugin);
+    .add_plugins(ui_menu::plugin)
+    .add_plugins(net::plugin);
+
+    #[cfg(not(target_family = "wasm"))]
+    app.add_plugins(TokioTasksPlugin::default());
 
     #[cfg(feature = "bevy-inspector-egui")]
     {
@@ -334,20 +434,10 @@ pub fn main() {
         .insert_resource(ClearColor(Color::srgb_u8(33, 34, 37)))
         .insert_resource(FlashIntensity(0.3))
         .insert_resource(Config {
-            players: vec![
-                PlayerConfigEntry::Human {
-                    color: Color::srgb(0.0, 1.0, 0.0),
-                    name: "Player 1".into(),
-                    _level: 0,
-                },
-                PlayerConfigEntry::Bot {
-                    color: Color::srgb(0.0, 0.0, 1.0),
-                    _name: "Player 2".into(),
-                    level: 0,
-                },
-            ],
+            players: vec![PlayerConfigEntry::default_for_player(1), PlayerConfigEntry::default_for_player(2)],
             grid_size: (6, 6),
         })
+        .init_resource::<GameCode>()
         .add_systems(Startup, setup_scene)
         .add_systems(OnEnter(MainState::Game), fly_in_game)
         .add_systems(OnExit(MainState::Game), fly_out_game)
@@ -403,6 +493,14 @@ pub fn main() {
                 }
             },
         )
+        .add_systems(Update, |game_code: Res<GameCode>, texts: Query<&mut Text, With<GameCodeText>>| {
+            if let Some(code) = &game_code.0 {
+                let code_formatted = code.chars().chain(iter::repeat('-')).take(4).intersperse(' ').collect::<String>();
+                for mut text in texts {
+                    text.0 = code_formatted.clone();
+                }
+            }
+        })
         .init_state::<MainState>()
         .init_state::<NeedNewBoard>()
         .init_state::<CurrentTurn>()
@@ -499,13 +597,7 @@ fn esc_to_menu(
                 && end_game.game_ended
             {
                 main_state.set(MainState::Menu);
-                ui_opacity.0 = 0.0;
-                let ui_tree = ui_tree.single().unwrap();
-                commands.spawn_task(move || async move {
-                    AsyncWorld.sleep(0.75).await;
-                    fetch!(ui_tree, Visibility).get_mut(|x| *x = Visibility::Hidden)?;
-                    Ok(())
-                });
+                fade_out_ui(&mut commands, &mut ui_opacity, &ui_tree);
             } else {
                 main_state.set(MainState::Menu);
                 menu_state.set(MenuState::Pause);
@@ -527,6 +619,7 @@ fn fly_in_game(
     mut next_turn: ResMut<NextState<CurrentTurn>>,
     named_entities: Query<(Entity, &Name)>,
     mut game_operation: ResMut<NextState<GameOperation>>,
+    game_hud: Query<Entity, With<GameHudUiTree>>,
 ) {
     let (width, height) = config.grid_size;
     let max_dim = (width * 2 / 3).max(height);
@@ -572,6 +665,7 @@ fn fly_in_game(
                         &game_assets,
                         x as f32 - width as f32 / 2.0 + 0.5,
                         y as f32 - height as f32 / 2.0 + 0.5,
+                        (x, y),
                         capacity,
                     );
                 }
@@ -582,12 +676,34 @@ fn fly_in_game(
         next_need_new_board.set(NeedNewBoard(false));
         next_turn.set(CurrentTurn(0));
     }
+
+    let game_hud = game_hud.single().unwrap();
+
+    commands.spawn_task(move || async move {
+        AsyncWorld.sleep(0.75).await;
+        fetch!(game_hud, Visibility).get_mut(|x| *x = Visibility::Inherited)?;
+        fetch!(TargetUiOpacity).get_mut(|ui_opacity| ui_opacity.0 = 1.0)?;
+        Ok(())
+    });
 }
 
-fn fly_out_game(mut grid_tray: Query<&mut TargetTransform, With<GridTray>>) {
+fn fly_out_game(
+    mut commands: Commands,
+    mut grid_tray: Query<&mut TargetTransform, With<GridTray>>,
+    game_hud: Query<Entity, With<GameHudUiTree>>,
+    mut ui_opacity: ResMut<TargetUiOpacity>,
+) {
     if let Ok(mut target) = grid_tray.single_mut() {
         target.translation = Vec3::new(0.0, 0.0, 30.0);
     }
+
+    ui_opacity.0 = 0.0;
+    let game_hud = game_hud.single().unwrap();
+    commands.spawn_task(move || async move {
+        AsyncWorld.sleep(0.75).await;
+        fetch!(game_hud, Visibility).get_mut(|x| *x = Visibility::Hidden)?;
+        Ok(())
+    });
 }
 
 fn fly_to_menu(
@@ -636,6 +752,7 @@ fn spawn_cell(
     game_assets: &GameAssets,
     x: f32,
     z: f32,
+    pos: (usize, usize),
     capacity: usize,
 ) -> Entity {
     commands
@@ -671,7 +788,7 @@ fn spawn_cell(
                   state: Option<Res<State<GameOperation>>>,
                   next_state: Option<ResMut<NextState<GameOperation>>>,
                   current_turn: Option<Res<State<CurrentTurn>>>,
-                  grid_tray: Query<Entity, With<GridTray>>| {
+                  grid_tray: Query<Entity, With<GridTray>>, net_tx: Res<NetServerboundSender>,| {
                 if let (Some(state), Some(mut next_state), Some(current_turn)) = (state, next_state, current_turn)
                     && *state == GameOperation::Human
                 {
@@ -682,6 +799,7 @@ fn spawn_cell(
                             .entity(trigger.original_event_target())
                             .with_related::<Dot>((spawn_dot(x, z, &game_assets), ChildOf(grid_tray.single().unwrap())));
                         next_state.set(GameOperation::Animating);
+                        net_tx.force_send(NetManagerMessage::Move { x: pos.0 as u8, y: pos.1 as u8 }).unwrap();
                     }
                 }
             },
@@ -741,6 +859,7 @@ fn setup_scene(mut commands: Commands, game_assets: Res<GameAssets>, asset_serve
         Transform::from_xyz(0.0, 4.0, 0.0),
     ));
 
+    #[cfg(not(target_family = "wasm"))]
     commands.spawn((
         PointLight {
             color: Color::WHITE,
@@ -881,7 +1000,8 @@ pub fn scatter_tick(
     } else if !game_over && !need_new_board.0 {
         // Check so we keep orbiting if the game has ended and don't do stupid stuff if we need a new board
         let next_turn_idx = current_turn.0 % player_config.players.len();
-        next_state.set(match player_config.players[next_turn_idx] {
+        next_state.set(match &player_config.players[next_turn_idx] {
+            x if x.online() => GameOperation::OnlinePlayer,
             PlayerConfigEntry::Bot { .. } => GameOperation::Bot,
             PlayerConfigEntry::Human { .. } => GameOperation::Human,
             _ => unreachable!(), // Disabled should never be in the final config

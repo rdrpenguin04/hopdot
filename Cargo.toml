@@ -17,7 +17,7 @@ serde_json = "1.0.140"
 time = "0.3.41"
 uuid = { version = "1.17.0", features = ["serde"] }
 rand = "0.9.2"
-bevy = { version = "0.17.1", default-features = false }
+bevy = { version = "0.17.2", default-features = false }
 bevy_defer = "0.15.0"
 
 [profile.dev]
@@ -63,35 +63,27 @@ opt-level = "s"
 strip = "debuginfo"
 
 [patch.crates-io]
-bevy = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
 bevy_a11y = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
-bevy_animation = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
-bevy_asset = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
-bevy_asset_macros = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
 bevy_app = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
+bevy_asset = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
 bevy_camera = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
 bevy_color = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
-bevy_core_pipeline = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
+bevy_derive = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
 bevy_ecs = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
-bevy_gltf = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
 bevy_image = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
 bevy_input = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
-bevy_light = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
+bevy_input_focus = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
 bevy_log = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
+bevy_macro_utils = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
 bevy_math = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
 bevy_mesh = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
-bevy_pbr = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
 bevy_picking = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
 bevy_platform = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
+bevy_ptr = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
 bevy_reflect = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
-bevy_render = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
-bevy_scene = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
-bevy_sprite_render = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
-bevy_state = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
-bevy_shader = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
+bevy_tasks = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
+bevy_time = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
 bevy_transform = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
-bevy_ui = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
-bevy_ui_render = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
 bevy_utils = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
 bevy_window = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }
 bevy_winit = { git = "https://github.com/LightningCreations/bevy", branch = "v0.17.2-patched" }

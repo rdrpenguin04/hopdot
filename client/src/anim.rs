@@ -8,7 +8,11 @@ pub struct TargetTransform(pub Transform);
 
 #[derive(Component, Default, Deref, DerefMut, Reflect)]
 #[reflect(Component)]
+#[require(SidechannelTextAlpha(1.0))]
 pub struct TargetMaterialColor(pub Color);
+
+#[derive(Component, Deref)]
+struct SidechannelTextAlpha(f32);
 
 #[derive(Component, Default, Reflect)]
 pub struct SmoothingSettings {
@@ -23,6 +27,9 @@ pub struct Bouncing(pub f64);
 #[derive(Resource, Reflect)]
 pub struct TargetUiOpacity(pub f32);
 
+#[derive(Resource, Reflect)]
+pub struct CurrentUiOpacity(pub f32);
+
 pub fn plugin(app: &mut App) {
     app.add_systems(
         Update,
@@ -35,7 +42,8 @@ pub fn plugin(app: &mut App) {
             run_ui_opacity,
         ),
     )
-    .insert_resource(TargetUiOpacity(0.0));
+    .insert_resource(TargetUiOpacity(0.0))
+    .insert_resource(CurrentUiOpacity(0.0));
 }
 
 fn smooth_transform(mut transforms: Query<(&TargetTransform, &SmoothingSettings, &mut Transform)>, time: Res<Time>) {
@@ -104,29 +112,50 @@ fn animate_cell_colors(mut cells: Query<(&mut TargetMaterialColor, &CellColor)>,
 
 fn animate_material_colors(
     meshes: Query<(&MeshMaterial3d<StandardMaterial>, &TargetMaterialColor, Has<CellColor>)>,
+    mut texts: Query<(&mut TextColor, &TargetMaterialColor, &mut SidechannelTextAlpha)>,
     time: Res<Time>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    ui_opacity: Res<CurrentUiOpacity>,
 ) {
     for (material, target_color, is_cell) in &meshes {
         if let Color::Srgba(target_color) = target_color.0 {
             let decay_rate = if is_cell { 3.0 } else { 6.0 };
             let material = materials.get_mut(material.id()).unwrap();
+            let target_color_vec = target_color.to_vec4();
             if let Color::Srgba(srgba) = &mut material.base_color {
                 let mut temp = srgba.to_vec4();
-                let target_color_vec = target_color.to_vec4();
                 temp.smooth_nudge(&target_color_vec, decay_rate, time.delta_secs());
                 *srgba = Srgba::from_vec4(temp);
-            } else if let Color::LinearRgba(srgba) = &mut material.base_color {
-                let mut temp = srgba.to_vec4();
-                let target_color_vec = target_color.to_vec4();
+            } else if let Color::LinearRgba(rgba) = &mut material.base_color {
+                let mut temp = rgba.to_vec4();
                 temp.smooth_nudge(&target_color_vec, decay_rate, time.delta_secs());
-                *srgba = LinearRgba::from_vec4(temp);
+                *rgba = LinearRgba::from_vec4(temp);
             } else {
                 dbg!(material.base_color);
             }
             let mut temp = material.emissive.to_vec4();
             temp.smooth_nudge(&Vec4::ZERO, 10.0, time.delta_secs());
             material.emissive = LinearRgba::from_vec4(temp);
+        }
+    }
+
+    for (mut text_color, target_color, mut sidechannel) in &mut texts {
+        if let Color::Srgba(target_color) = target_color.0 {
+            let target_color_vec = target_color.to_vec3();
+            let target_alpha = target_color.alpha;
+            if let Color::Srgba(srgba) = &mut text_color.0 {
+                let mut temp = srgba.to_vec3();
+                temp.smooth_nudge(&target_color_vec, 3.0, time.delta_secs());
+                sidechannel.0.smooth_nudge(&target_alpha, 6.0, time.delta_secs());
+                *srgba = Srgba::from_vec4(vec4(temp.x, temp.y, temp.z, sidechannel.0 * ui_opacity.0));
+            } else if let Color::LinearRgba(rgba) = &mut text_color.0 {
+                let mut temp = rgba.to_vec3();
+                temp.smooth_nudge(&target_color_vec, 3.0, time.delta_secs());
+                sidechannel.0.smooth_nudge(&target_alpha, 6.0, time.delta_secs());
+                *rgba = LinearRgba::from_vec4(vec4(temp.x, temp.y, temp.z, sidechannel.0 * ui_opacity.0));
+            } else {
+                dbg!(text_color.0);
+            }
         }
     }
 }
@@ -155,21 +184,17 @@ fn run_ui_opacity(
     outlines: Query<&mut Outline>,
     background_colors: Query<&mut BackgroundColor, With<AnimateBackgroundColor>>,
     target_ui_opacity: Res<TargetUiOpacity>,
+    mut current_ui_opacity: ResMut<CurrentUiOpacity>,
     time: Res<Time>,
 ) {
+    current_ui_opacity.0.smooth_nudge(&target_ui_opacity.0, 5.0, time.delta_secs());
     for mut text_color in text_colors {
-        let mut alpha = text_color.alpha();
-        alpha.smooth_nudge(&target_ui_opacity.0, 5.0, time.delta_secs());
-        text_color.set_alpha(alpha);
+        text_color.set_alpha(current_ui_opacity.0);
     }
     for mut outline in outlines {
-        let mut alpha = outline.color.alpha();
-        alpha.smooth_nudge(&target_ui_opacity.0, 5.0, time.delta_secs());
-        outline.color.set_alpha(alpha);
+        outline.color.set_alpha(current_ui_opacity.0);
     }
     for mut background_color in background_colors {
-        let mut alpha = background_color.0.alpha();
-        alpha.smooth_nudge(&target_ui_opacity.0, 5.0, time.delta_secs());
-        background_color.0.set_alpha(alpha);
+        background_color.0.set_alpha(current_ui_opacity.0);
     }
 }

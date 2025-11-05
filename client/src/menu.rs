@@ -6,9 +6,9 @@ use bevy::{
 };
 
 use crate::{
-    Config, MainState, NeedNewBoard, add_hover_observers,
+    Config, GameCode, MainState, NeedNewBoard, add_hover_observers,
     anim::{SmoothingSettings, TargetMaterialColor, TargetTransform, TargetUiOpacity},
-    ui_menu::{CreditsUiTree, CustomConfig, CustomGameSetupUiTree, RulesUiTree, SettingsUiTree},
+    ui_menu::{CreditsUiTree, CustomConfig, CustomGameSetupUiTree, HostGameUiTree, InfoText, JoinGameUiTree, RulesUiTree, SettingsUiTree},
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Reflect)]
@@ -16,6 +16,7 @@ pub enum MainMenuSubState {
     #[default]
     Main,
     StartGame,
+    Online,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Reflect, SubStates)]
@@ -58,7 +59,7 @@ impl MenuState {
 
     fn is_deeper_than(&self, menu: &Self) -> bool {
         // TODO: generalize
-        *self == Self::Main(Some(MainMenuSubState::StartGame)) && *menu == Self::Main(Some(MainMenuSubState::Main))
+        matches!(self, Self::Main(Some(MainMenuSubState::StartGame | MainMenuSubState::Online))) && *menu == Self::Main(Some(MainMenuSubState::Main))
     }
 
     fn is_top_level(&self) -> bool {
@@ -262,9 +263,15 @@ fn insert_menu_element(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
                 );
             }
             "start-game" => {
-                entity_commands.observe(|_: On<Pointer<Click>>, mut next_menu: ResMut<NextState<MenuState>>| {
-                    next_menu.set(MenuState::Main(Some(MainMenuSubState::StartGame)));
-                });
+                entity_commands.observe(
+                    |_: On<Pointer<Click>>, mut next_menu: ResMut<NextState<MenuState>>, mut game_code: ResMut<GameCode>, mut radios: ResMut<MenuRadios>| {
+                        next_menu.set(MenuState::Main(Some(MainMenuSubState::StartGame)));
+                        game_code.0 = None;
+                        if let Some(game_type) = radios.radios.get_mut("game-type") {
+                            game_type.enable();
+                        }
+                    },
+                );
             }
             "go" => {
                 entity_commands.observe(
@@ -283,6 +290,46 @@ fn insert_menu_element(mut world: DeferredWorld, HookContext { entity, .. }: Hoo
                 entity_commands.observe(|_: On<Pointer<Click>>, mut next_menu: ResMut<NextState<MenuState>>| {
                     next_menu.set(MenuState::Main(Some(MainMenuSubState::Main)));
                 });
+            }
+            "online" => {
+                entity_commands.observe(
+                    |_: On<Pointer<Click>>, mut next_menu: ResMut<NextState<MenuState>>, mut game_code: ResMut<GameCode>| {
+                        next_menu.set(MenuState::Main(Some(MainMenuSubState::Online)));
+                        game_code.0 = Some(String::new());
+                    },
+                );
+            }
+            "host" => {
+                entity_commands.observe(
+                    |_: On<Pointer<Click>>,
+                     mut next_state: ResMut<NextState<MainState>>,
+                     mut host_game_ui_tree: Query<&mut Visibility, With<HostGameUiTree>>,
+                     mut ui_opacity: ResMut<TargetUiOpacity>,
+                     mut info_texts: Query<&mut Node, With<InfoText>>| {
+                        next_state.set(MainState::DimForUi);
+                        *host_game_ui_tree.single_mut().unwrap() = Visibility::Visible;
+                        ui_opacity.0 = 1.0;
+                        for mut node in &mut info_texts {
+                            node.display = Display::None;
+                        }
+                    },
+                );
+            }
+            "join" => {
+                entity_commands.observe(
+                    |_: On<Pointer<Click>>,
+                     mut next_state: ResMut<NextState<MainState>>,
+                     mut join_game_ui_tree: Query<&mut Visibility, With<JoinGameUiTree>>,
+                     mut ui_opacity: ResMut<TargetUiOpacity>,
+                     mut info_texts: Query<&mut Node, With<InfoText>>| {
+                        next_state.set(MainState::DimForUi);
+                        *join_game_ui_tree.single_mut().unwrap() = Visibility::Visible;
+                        ui_opacity.0 = 1.0;
+                        for mut node in &mut info_texts {
+                            node.display = Display::None;
+                        }
+                    },
+                );
             }
             "game-type-changed" | "game-difficulty-changed" => {}
             x => {

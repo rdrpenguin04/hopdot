@@ -53,7 +53,7 @@ pub fn menu(ga: &GameAssets) -> impl Bundle {
                         children![
                             (
                                 PlayerConfigPlusLabel,
-                                button_with_bg(ga, "+", Color::srgb(0.2, 0.2, 0.2)),
+                                button_default_bg(ga, "+"),
                                 observe(move |_: On<Pointer<Click>>, mut config: ResMut<CustomConfig>| {
                                     for player in config.players.iter_mut() {
                                         if player.is_disabled() {
@@ -65,7 +65,7 @@ pub fn menu(ga: &GameAssets) -> impl Bundle {
                             ),
                             (
                                 PlayerConfigMinusLabel,
-                                button_with_bg(ga, "-", Color::srgb(0.2, 0.2, 0.2)),
+                                button_default_bg(ga, "-"),
                                 observe(move |_: On<Pointer<Click>>, mut config: ResMut<CustomConfig>| {
                                     for player in config.players.iter_mut().rev() {
                                         if !player.is_disabled() {
@@ -199,7 +199,7 @@ fn player_config(ga: &GameAssets, player_idx: usize) -> impl Bundle {
                     ..default()
                 },
                 children![(
-                    button_with_bg(ga, "Human", Color::srgb(0.2, 0.2, 0.2)),
+                    button_default_bg(ga, "Human"),
                     observe(move |_: On<Pointer<Click>>, mut config: ResMut<CustomConfig>| {
                         config.players[player_idx].to_bot();
                     })
@@ -213,35 +213,35 @@ fn player_config(ga: &GameAssets, player_idx: usize) -> impl Bundle {
                 },
                 children![
                     (
-                        button_with_bg(ga, "Bot", Color::srgb(0.2, 0.2, 0.2)),
+                        button_default_bg(ga, "Bot"),
                         observe(move |_: On<Pointer<Click>>, mut config: ResMut<CustomConfig>| {
                             config.players[player_idx].to_human();
                         }),
                     ),
                     (
                         PlayerConfigBotLevelLabel { player_idx, level: 0 },
-                        button_with_bg(ga, "Easiest", Color::srgb(0.2, 0.2, 0.2)),
+                        button_default_bg(ga, "Easiest"),
                         observe(move |_: On<Pointer<Click>>, mut config: ResMut<CustomConfig>| {
                             config.players[player_idx].set_level(0);
                         }),
                     ),
                     (
                         PlayerConfigBotLevelLabel { player_idx, level: 1 },
-                        button_with_bg(ga, "Easy", Color::srgb(0.2, 0.2, 0.2)),
+                        button_default_bg(ga, "Easy"),
                         observe(move |_: On<Pointer<Click>>, mut config: ResMut<CustomConfig>| {
                             config.players[player_idx].set_level(1);
                         }),
                     ),
                     (
                         PlayerConfigBotLevelLabel { player_idx, level: 2 },
-                        button_with_bg(ga, "Medium", Color::srgb(0.2, 0.2, 0.2)),
+                        button_default_bg(ga, "Medium"),
                         observe(move |_: On<Pointer<Click>>, mut config: ResMut<CustomConfig>| {
                             config.players[player_idx].set_level(2);
                         }),
                     ),
                     (
                         PlayerConfigBotLevelLabel { player_idx, level: 3 },
-                        button_with_bg(ga, "Hard", Color::srgb(0.2, 0.2, 0.2)),
+                        button_default_bg(ga, "Hard"),
                         observe(move |_: On<Pointer<Click>>, mut config: ResMut<CustomConfig>| {
                             config.players[player_idx].set_level(3);
                         }),
@@ -267,16 +267,8 @@ pub fn render_player_config(
         return;
     } else if config.players.len() < 4 {
         assert!(config.players.len() == 2);
-        config.players.push(PlayerConfigEntry::Disabled {
-            _color: Color::srgb(1.0, 0.0, 1.0),
-            _name: "Player 3".into(),
-            _level: 0,
-        });
-        config.players.push(PlayerConfigEntry::Disabled {
-            _color: Color::srgb(0.0, 1.0, 1.0),
-            _name: "Player 4".into(),
-            _level: 0,
-        });
+        config.players.push(PlayerConfigEntry::default_for_player(3));
+        config.players.push(PlayerConfigEntry::default_for_player(4));
     }
     node.p0().single_mut().unwrap().display = if config.players[2].is_disabled() { Display::None } else { Display::Block };
     node.p1().single_mut().unwrap().display = if config.players[3].is_disabled() { Display::Block } else { Display::None };
