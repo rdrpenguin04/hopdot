@@ -462,7 +462,13 @@ async fn net_manager_main(rx: Receiver<NetManagerMessage>, tx: Sender<NetMessage
                                 }
                                 Ok(message) => match message {
                                     Message::Binary(x) => {
-                                        let message = bson::deserialize_from_slice(&x).unwrap();
+                                        let message = match bson::deserialize_from_slice(&x) {
+                                            Ok(x) => x,
+                                            Err(e) => {
+                                                error!("error handling unrecognized server message: {e:?} (message: {x:?})");
+                                                continue;
+                                            }
+                                        };
                                         info!("{message:?}");
                                         match message {
                                             GameClientbound::WaitingFor { .. } | GameClientbound::Turn { .. } => {
@@ -474,12 +480,14 @@ async fn net_manager_main(rx: Receiver<NetManagerMessage>, tx: Sender<NetMessage
                                             GameClientbound::Move { player, x, y } => {
                                                 tx.send(NetMessageClientbound::Move { player, x, y }).await.unwrap();
                                             }
-                                            x => todo!("{x:?}"),
+                                            x => {
+                                                error!("unhandled server message: {x:?}");
+                                            }
                                         }
                                     }
                                     #[cfg(not(target_family = "wasm"))]
                                     Message::Close(_) => {}
-                                    x => info!("unhandled message: {x:?}"),
+                                    x => info!("unhandled websocket message: {x:?}"),
                                 },
                             }
                         }
