@@ -1,12 +1,12 @@
 [workspace]
-members = ["client", "common"]
+members = ["client", "common", "server"]
 default-members = ["client"]
 resolver = "3"
 
 [workspace.package]
 version = "1.3.0"
 edition = "2024"
-authors = ["Ray Redondo (rdredondo@lcdev.xyz)"]
+authors = ["Ray Redondo <rdredondo@lcdev.xyz>", "Connor Horman <chorman@lcdev.xyz>"]
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]

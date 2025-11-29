@@ -1,0 +1,31 @@
+[package]
+name = "hopdot-server"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+actix-web = "4.11.0"
+actix-web-httpauth = "0.8.2"
+actix-ws = "0.3.0"
+anyhow = "1.0.98"
+env_logger = "0.11.8"
+futures-util = "0.3.31"
+jws = "0.2.9"
+log = "0.4.27"
+rusqlite = { version = "0.36.0", features = ["uuid", "time"] }
+serde.workspace = true
+serde_json.workspace = true
+time.workspace = true
+uuid = { workspace = true, features = ["v7"] }
+common.workspace = true
+futures = { version = "0.3.31", default-features = false, features = [
+    "std",
+    "alloc",
+    "async-await",
+] }
+bevy = { workspace = true, features = ["bevy_log", "std"] }
+bevy_defer.workspace = true
+argon2 = "0.5.3"
+check-if-email-exists = "0.9.1"
