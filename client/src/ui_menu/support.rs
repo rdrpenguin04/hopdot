@@ -30,12 +30,12 @@ pub fn back_to_menu<T: Component>(ga: &GameAssets, text: &'static str, menu: Men
     (
         Node {
             margin: UiRect::top(Val::Px(20.0)),
+            border_radius: BorderRadius::all(Val::Px(5.0)),
             ..default()
         },
         Button,
         p(ga, text),
         Outline::new(Val::Px(5.0), Val::Px(5.0), Color::WHITE),
-        BorderRadius::all(Val::Px(5.0)),
         observe(
             move |_: On<Pointer<Click>>,
                   mut commands: Commands,
@@ -89,13 +89,13 @@ pub fn button_with_bg(ga: &GameAssets, text: impl Into<String>, color: Color) ->
         Node {
             margin: UiRect::horizontal(Val::Px(5.0)),
             padding: UiRect::axes(Val::Px(3.0), Val::Px(3.0)),
+            border_radius: BorderRadius::all(Val::Px(5.0)),
             ..default()
         },
         Button,
         AnimateBackgroundColor,
         BackgroundColor(color),
         Outline::new(Val::Px(3.0), Val::Px(0.0), Color::WHITE),
-        BorderRadius::all(Val::Px(5.0)),
         children![(
             Text::new(text),
             TextFont {

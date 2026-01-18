@@ -432,7 +432,7 @@ pub fn main() {
     app.init_resource::<GameAssets>()
         .init_resource::<VisualGrid>()
         .init_resource::<Ais>()
-        .insert_resource(AmbientLight {
+        .insert_resource(GlobalAmbientLight {
             brightness: 1000.0,
             ..default()
         })
