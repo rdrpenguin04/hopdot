@@ -1528,9 +1528,9 @@ dependencies = [
 
 [[package]]
 name = "bevy_skein"
-version = "0.5.0-rc.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f066808b59d2b2278f81f3005bb672dc1e8ae74c1b1c7743eea8b2d01abb5f7"
+checksum = "c8daba67c48822be5e6a3e33aa53b9a925dee1d8e3f75758f1e8c15fa93a0b8d"
 dependencies = [
  "bevy_app",
  "bevy_asset",
@@ -1540,6 +1540,7 @@ dependencies = [
  "bevy_platform",
  "bevy_reflect",
  "bevy_scene",
+ "bevy_tasks",
  "gltf",
  "serde",
  "serde_json",

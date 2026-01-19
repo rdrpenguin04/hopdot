@@ -15,7 +15,7 @@ bevy = { workspace = true, default-features = true, features = [
 bevy_defer.workspace = true
 bevy_prng = { version = "0.13.0", features = ["wyrand"] }
 bevy_rand = "0.13.0"
-bevy_skein = { version = "0.5.0-rc.1", default-features = false }
+bevy_skein = { version = "0.5.0", default-features = false }
 # bevy_skein = { version = "0.3.0" }
 log = { version = "*", features = [
     "max_level_debug",
